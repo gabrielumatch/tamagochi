@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { View, StyleSheet, ScrollView, Text, Pressable } from "react-native";
 import { usePet } from "../../contexts/PetContext";
-// import { useUser } from "../../contexts/UserContext";
+import { useUser } from "../../contexts/UserContext";
 import PetDisplay from "../../components/pet/PetDisplay";
 import StatusBars from "../../components/pet/StatusBars";
 import Card from "../../components/ui/Card";
@@ -12,33 +12,6 @@ import { router } from "expo-router";
 import Layout from "../../constants/Layout";
 import { PetStage } from "../../constants/PetTypes";
 import EvolutionStatusBar from "../../components/pet/EvolutionStatusBar";
-
-// Mock user hook until TypeScript resolves the import issue
-const useUser = () => {
-  return {
-    user: {
-      coins: 100,
-      items: [],
-      settings: {
-        notificationsEnabled: true,
-        soundEnabled: true,
-        vibrationEnabled: true,
-        theme: "system",
-      },
-      achievements: {},
-    },
-    isLoading: false,
-    addCoins: () => {},
-    spendCoins: () => true,
-    addItem: () => {},
-    useItem: () => true,
-    toggleNotifications: () => {},
-    toggleSound: () => {},
-    toggleVibration: () => {},
-    setTheme: () => {},
-    unlockAchievement: () => {},
-  };
-};
 
 export default function HomeScreen() {
   const { pet, isLoading, updatePetAttributes, createPet, evolvePet } =

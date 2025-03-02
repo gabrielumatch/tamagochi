@@ -1,5 +1,4 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   EVOLUTION,
   ATTRIBUTE_DECREASE,
@@ -11,6 +10,7 @@ import {
   ATTRIBUTE_THRESHOLDS,
 } from "../constants/PetSettings";
 import { PetType, PetStage, PetAttributes, Pet } from "../constants/PetTypes";
+import { getItem, setItem } from "../utils/storage";
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -59,11 +59,11 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Load pet data from storage on mount
   useEffect(() => {
-    const loadPet = async () => {
+    const loadPet = () => {
       try {
-        const petData = await AsyncStorage.getItem("pet");
+        const petData = getItem<Pet>("pet");
         if (petData) {
-          setPet(JSON.parse(petData));
+          setPet(petData);
         }
       } catch (error) {
         console.error("Failed to load pet data:", error);
@@ -77,10 +77,10 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Save pet data to storage whenever it changes
   useEffect(() => {
-    const savePet = async () => {
+    const savePet = () => {
       if (pet) {
         try {
-          await AsyncStorage.setItem("pet", JSON.stringify(pet));
+          setItem("pet", pet);
           console.log("Pet data saved to storage");
         } catch (error) {
           console.error("Failed to save pet data:", error);
@@ -97,14 +97,11 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
           happiness: pet.attributes.happiness.toFixed(2),
           hunger: pet.attributes.hunger.toFixed(2),
           energy: pet.attributes.energy.toFixed(2),
-          lastUpdated: new Date(
-            pet.attributes.lastUpdated
-          ).toLocaleTimeString(),
+          lastUpdated: new Date(pet.attributes.lastUpdated).toISOString(),
         },
       });
+      savePet();
     }
-
-    savePet();
   }, [pet]);
 
   // Update pet attributes based on time passed
