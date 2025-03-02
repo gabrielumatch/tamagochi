@@ -75,11 +75,8 @@ const PetDisplay = React.memo(
 
     // Get the appropriate emoji based on pet type and stage - memoized
     const petEmoji = useMemo(() => {
-      return (
-        petEmojis[petType]?.[petStage] ||
-        petEmojis[PetType.BIRD][petStage] ||
-        "🥚"
-      );
+      // Get emoji based on stage, falling back to default emoji
+      return petEmojis[petStage] || "🥚";
     }, [petType, petStage]);
 
     // Add sleeping indicator if the pet is sleeping - memoized
@@ -287,16 +284,18 @@ const PetDisplay = React.memo(
       return sequence;
     }, [animation, animationValues]);
 
-  // Get the appropriate emoji based on pet stage and type
-  const getPetEmoji = () => {
-    // Use the pet type and stage to get the correct emoji
-    return (
-      getPetEmojiFromSettings(pet.type, pet.stage) ||
-      petEmojis[pet.stage as PetStage] ||
-      "🥚"
-    );
-  };
+    // Get the appropriate emoji based on pet stage and type
+    const getPetEmoji = () => {
+      // Use the pet type and stage to get the correct emoji
+      return (
+        getPetEmojiFromSettings(pet.type, pet.stage) ||
+        petEmojis[pet.stage as PetStage] ||
+        "🥚"
+      );
+    };
 
+    // Use an effect to manage animations
+    useEffect(() => {
       // Create and start new animation
       const sequence = createAnimationSequence();
       if (sequence) {

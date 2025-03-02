@@ -205,13 +205,6 @@ const StatusBar = React.memo(function StatusBar({
   );
 });
 
-// Clean up the timer manager when the app is unmounted
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeunload", () => {
-    TimerManager.getInstance().cleanup();
-  });
-}
-
 interface StatusBarsProps {
   attributes: PetAttributes;
 }

@@ -17,7 +17,7 @@ import Layout from "../../constants/Layout";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { removeItem } from "../../utils/storage";
 
-export function SettingsScreen() {
+export default function SettingsScreen() {
   const { pet, setPet } = usePet();
   const { user, toggleNotifications, toggleSound, toggleVibration, setTheme } =
     useUser();

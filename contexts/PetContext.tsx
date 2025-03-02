@@ -1,4 +1,11 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+  useCallback,
+} from "react";
 import {
   EVOLUTION,
   ATTRIBUTE_DECREASE,
@@ -36,6 +43,7 @@ interface PetContextType {
   updatePetAttributes: () => void;
   evolvePet: () => void;
   resurrectPet: () => void;
+  canPetEvolve: () => boolean;
 }
 
 // Create context with default values
@@ -51,6 +59,7 @@ const PetContext = createContext<PetContextType>({
   updatePetAttributes: () => {},
   evolvePet: () => {},
   resurrectPet: () => {},
+  canPetEvolve: () => false,
 });
 
 // Create provider component
@@ -172,7 +181,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [pet]);
 
   // Update pet attributes based on time passed - with throttling
-  const updatePetAttributes = useCallback(() => {
+  const updatePetAttributes = () => {
     if (!pet) return;
 
     // Skip updates if pet is already dead
@@ -328,6 +337,10 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
           petStage as PetStage
         );
 
+        // Calculate seconds since last evolution for checking evolution criteria
+        const secondsSinceLastEvolution =
+          (now - prevPet.birthDate) / 1000 - prevPet.lastEvolutionAge;
+
         // Check if attributes are good enough for evolution
         const canEvolve =
           updatedAttributes.hunger >
@@ -339,39 +352,44 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
           updatedAttributes.energy >
             evolutionSettings.requiredAttributes.energy;
 
-      // Add a safety check - if the pet was recently resurrected, don't evolve immediately
-      const timeSinceLastUpdate = (now - prevPet.attributes.lastUpdated) / 1000;
-      const recentlyUpdated = timeSinceLastUpdate < 5; // Less than 5 seconds since last update
+        // Add a safety check - if the pet was recently resurrected, don't evolve immediately
+        const timeSinceLastUpdate =
+          (now - prevPet.attributes.lastUpdated) / 1000;
+        const recentlyUpdated = timeSinceLastUpdate < 5; // Less than 5 seconds since last update
 
-      console.log("Evolution check:");
-      console.log("- Current stage:", stage);
-      console.log("- Seconds since last evolution:", secondsSinceLastEvolution);
-      console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
-      console.log("- Can evolve based on attributes:", canEvolve);
-      console.log("- Recently updated:", recentlyUpdated);
+        console.log("Evolution check:");
+        console.log("- Current stage:", stage);
+        console.log(
+          "- Seconds since last evolution:",
+          secondsSinceLastEvolution
+        );
+        console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
+        console.log("- Can evolve based on attributes:", canEvolve);
+        console.log("- Recently updated:", recentlyUpdated);
 
-      // Only evolve if attributes are good enough, enough time has passed, and not recently updated
-      if (
-        canEvolve &&
-        secondsSinceLastEvolution >= evolutionSettings.timeToEvolve &&
-        !recentlyUpdated
-      ) {
-        if (stage === PetStage.TEEN) {
-          stage = PetStage.ADULT;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Pet evolved to ADULT!");
-        } else if (stage === PetStage.CHILD) {
-          stage = PetStage.TEEN;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Pet evolved to TEEN!");
-        } else if (stage === PetStage.BABY) {
-          stage = PetStage.CHILD;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Pet evolved to CHILD!");
-        } else if (stage === PetStage.EGG) {
-          stage = PetStage.BABY;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Egg hatched to BABY!");
+        // Only evolve if attributes are good enough, enough time has passed, and not recently updated
+        if (
+          canEvolve &&
+          secondsSinceLastEvolution >= evolutionSettings.timeToEvolve &&
+          !recentlyUpdated
+        ) {
+          if (stage === PetStage.TEEN) {
+            stage = PetStage.ADULT;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Pet evolved to ADULT!");
+          } else if (stage === PetStage.CHILD) {
+            stage = PetStage.TEEN;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Pet evolved to TEEN!");
+          } else if (stage === PetStage.BABY) {
+            stage = PetStage.CHILD;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Pet evolved to CHILD!");
+          } else if (stage === PetStage.EGG) {
+            stage = PetStage.BABY;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Egg hatched to BABY!");
+          }
         }
       }
 
@@ -389,7 +407,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         attributes: finalAttributes,
       };
     });
-  }, [pet]);
+  };
 
   // Create a new pet
   const createPet = (name: string, petType: PetType = PetType.CAT) => {
@@ -632,6 +650,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         updatePetAttributes,
         evolvePet,
         resurrectPet,
+        canPetEvolve,
       }}
     >
       {children}
