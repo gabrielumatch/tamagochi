@@ -5,25 +5,12 @@ import {
   ATTRIBUTE_DECREASE,
   CARE_ACTIONS,
 } from "../constants/GameRules";
-
-// Define pet growth stages
-export enum PetStage {
-  EGG = "egg",
-  BABY = "baby",
-  CHILD = "child",
-  TEEN = "teen",
-  ADULT = "adult",
-}
-
-// Define pet attributes interface
-export interface PetAttributes {
-  health: number;
-  happiness: number;
-  hunger: number;
-  energy: number;
-  age: number;
-  lastUpdated: number;
-}
+import {
+  getEvolutionSettings,
+  getDecreaseRates,
+  ATTRIBUTE_THRESHOLDS,
+} from "../constants/PetSettings";
+import { PetType, PetStage, PetAttributes, Pet } from "../constants/PetTypes";
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -33,26 +20,12 @@ const generateId = () => {
   );
 };
 
-// Define pet interface
-export interface Pet {
-  id: string;
-  name: string;
-  type: string;
-  stage: string;
-  attributes: PetAttributes;
-  birthDate: number;
-  lastEvolutionAge: number;
-  age: number;
-  createdAt: number;
-  lastInteraction: number;
-}
-
 // Define context interface
 interface PetContextType {
   pet: Pet | null;
   setPet: React.Dispatch<React.SetStateAction<Pet | null>>;
   isLoading: boolean;
-  createPet: (name: string) => void;
+  createPet: (name: string, petType?: PetType) => void;
   feedPet: (foodType: "regular" | "treat" | "healthy") => void;
   playWithPet: () => void;
   cleanPet: () => void;
@@ -138,6 +111,8 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const now = Date.now();
     const hoursPassed = (now - pet.attributes.lastUpdated) / (1000 * 60 * 60);
+    const petType = pet.type as PetType;
+    const petStage = pet.stage as PetStage;
 
     console.log("===== PET UPDATE =====");
     console.log(
@@ -146,30 +121,74 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     );
     console.log("Current time:", new Date(now).toLocaleTimeString());
     console.log("Hours passed:", hoursPassed);
+    console.log("Pet type:", petType, "Pet stage:", petStage);
 
     if (hoursPassed < 0.001) {
       console.log("Not enough time passed, skipping update");
       return; // Only update if at least 3.6 seconds have passed
     }
 
-    // Calculate attribute decreases based on time using constants
+    // Get the decrease rates for this pet type and stage
+    const decreaseRates = getDecreaseRates(petType, petStage);
+
+    // Calculate attribute decreases based on time using pet-specific settings
+    // For real-time updates, we'll convert the seconds-based rates to hourly rates
+    const hungerPointsPerHour =
+      (3600 / decreaseRates.hunger.seconds) * decreaseRates.hunger.points;
+    const happinessPointsPerHour =
+      (3600 / decreaseRates.happiness.seconds) * decreaseRates.happiness.points;
+    const energyPointsPerHour =
+      (3600 / decreaseRates.energy.seconds) * decreaseRates.energy.points;
+    const healthPointsPerHour =
+      (3600 / decreaseRates.health.seconds) * decreaseRates.health.points;
+
     const hungerDecrease = Math.min(
       pet.attributes.hunger,
-      ATTRIBUTE_DECREASE.HUNGER * hoursPassed
+      hungerPointsPerHour * hoursPassed
     );
     const happinessDecrease = Math.min(
       pet.attributes.happiness,
-      ATTRIBUTE_DECREASE.HAPPINESS * hoursPassed
+      happinessPointsPerHour * hoursPassed
     );
     const energyDecrease = Math.min(
       pet.attributes.energy,
-      ATTRIBUTE_DECREASE.ENERGY * hoursPassed
+      energyPointsPerHour * hoursPassed
     );
 
+    // Health decreases only if other attributes are critical
+    let healthDecrease = 0;
+    if (
+      pet.attributes.hunger <= ATTRIBUTE_THRESHOLDS.CRITICAL ||
+      pet.attributes.happiness <= ATTRIBUTE_THRESHOLDS.CRITICAL ||
+      pet.attributes.energy <= ATTRIBUTE_THRESHOLDS.CRITICAL
+    ) {
+      healthDecrease = Math.min(
+        pet.attributes.health,
+        healthPointsPerHour * hoursPassed
+      );
+    }
+
     console.log("Attribute decreases:");
-    console.log("- Hunger:", hungerDecrease.toFixed(2));
-    console.log("- Happiness:", happinessDecrease.toFixed(2));
-    console.log("- Energy:", energyDecrease.toFixed(2));
+    console.log(
+      "- Hunger:",
+      hungerDecrease.toFixed(2),
+      `(${hungerPointsPerHour.toFixed(2)} points/hour)`
+    );
+    console.log(
+      "- Happiness:",
+      happinessDecrease.toFixed(2),
+      `(${happinessPointsPerHour.toFixed(2)} points/hour)`
+    );
+    console.log(
+      "- Energy:",
+      energyDecrease.toFixed(2),
+      `(${energyPointsPerHour.toFixed(2)} points/hour)`
+    );
+    console.log(
+      "- Health:",
+      healthDecrease.toFixed(2),
+      `(${healthPointsPerHour.toFixed(2)} points/hour)`
+    );
 
     // Update pet attributes
     setPet((prevPet) => {
@@ -183,6 +202,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
           prevPet.attributes.happiness - happinessDecrease
         ),
         energy: Math.max(0, prevPet.attributes.energy - energyDecrease),
+        health: Math.max(0, prevPet.attributes.health - healthDecrease),
         lastUpdated: now,
       };
 
@@ -190,51 +210,62 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log("- Hunger:", updatedAttributes.hunger.toFixed(2));
       console.log("- Happiness:", updatedAttributes.happiness.toFixed(2));
       console.log("- Energy:", updatedAttributes.energy.toFixed(2));
+      console.log("- Health:", updatedAttributes.health.toFixed(2));
 
-      // Check if pet should evolve based on age
+      // Check if pet should evolve based on age and settings
       const daysSinceBirth = (now - prevPet.birthDate) / (1000 * 60 * 60 * 24);
       let stage = prevPet.stage;
       let lastEvolutionAge = prevPet.lastEvolutionAge;
       const age = Math.floor(daysSinceBirth);
 
+      // Get evolution settings for this pet type and stage
+      const evolutionSettings = getEvolutionSettings(
+        petType as PetType,
+        petStage as PetStage
+      );
+
       // Check if attributes are good enough for evolution
       const canEvolve =
         updatedAttributes.hunger >
-          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE &&
+          evolutionSettings.requiredAttributes.hunger &&
         updatedAttributes.happiness >
-          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE &&
+          evolutionSettings.requiredAttributes.happiness &&
         updatedAttributes.health >
-          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE &&
-        updatedAttributes.energy >
-          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE;
+          evolutionSettings.requiredAttributes.health &&
+        updatedAttributes.energy > evolutionSettings.requiredAttributes.energy;
 
-      // Only evolve if attributes are good enough
-      if (canEvolve) {
-        if (
-          age >= EVOLUTION.DAYS_TO_EVOLVE.TEEN_TO_ADULT &&
-          stage === PetStage.TEEN
-        ) {
+      // For testing, we'll use seconds instead of days
+      const secondsSinceLastEvolution =
+        (now - prevPet.birthDate) / 1000 - prevPet.lastEvolutionAge;
+
+      console.log("Evolution check:");
+      console.log("- Current stage:", stage);
+      console.log("- Seconds since last evolution:", secondsSinceLastEvolution);
+      console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
+      console.log("- Can evolve based on attributes:", canEvolve);
+
+      // Only evolve if attributes are good enough and enough time has passed
+      if (
+        canEvolve &&
+        secondsSinceLastEvolution >= evolutionSettings.timeToEvolve
+      ) {
+        if (stage === PetStage.TEEN) {
           stage = PetStage.ADULT;
-          lastEvolutionAge = age;
-        } else if (
-          age >= EVOLUTION.DAYS_TO_EVOLVE.CHILD_TO_TEEN &&
-          stage === PetStage.CHILD
-        ) {
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Pet evolved to ADULT!");
+        } else if (stage === PetStage.CHILD) {
           stage = PetStage.TEEN;
-          lastEvolutionAge = age;
-        } else if (
-          age >= EVOLUTION.DAYS_TO_EVOLVE.BABY_TO_CHILD &&
-          stage === PetStage.BABY
-        ) {
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Pet evolved to TEEN!");
+        } else if (stage === PetStage.BABY) {
           stage = PetStage.CHILD;
-          lastEvolutionAge = age;
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Pet evolved to CHILD!");
+        } else if (stage === PetStage.EGG) {
+          stage = PetStage.BABY;
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Egg hatched to BABY!");
         }
-      }
-
-      // Egg always evolves to baby after half a day, regardless of attributes
-      if (age >= 0.5 && stage === PetStage.EGG) {
-        stage = PetStage.BABY;
-        lastEvolutionAge = age;
       }
 
       // Update attributes with age
@@ -254,12 +285,13 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Create a new pet
-  const createPet = (name: string) => {
+  const createPet = (name: string, petType: PetType = PetType.CAT) => {
     const now = Date.now();
+
     const newPet: Pet = {
       id: generateId(),
       name,
-      type: "default",
+      type: petType.toString(),
       stage: PetStage.EGG,
       attributes: {
         health: 100,
@@ -277,6 +309,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     setPet(newPet);
+    console.log("New pet created:", newPet);
   };
 
   // Feed the pet
@@ -377,39 +410,66 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  // Function to manually evolve the pet (for testing)
+  // Manually evolve the pet (for testing or when triggered by UI)
   const evolvePet = () => {
     if (!pet) return;
 
-    setPet((prevPet) => {
-      if (!prevPet) return null;
+    const petType = pet.type as PetType;
+    const petStage = pet.stage as PetStage;
 
-      let newStage = prevPet.stage;
+    // Get evolution settings for this pet type and stage
+    const evolutionSettings = getEvolutionSettings(petType, petStage);
 
-      switch (prevPet.stage) {
+    // Check if attributes are good enough for evolution
+    const canEvolve =
+      pet.attributes.hunger > evolutionSettings.requiredAttributes.hunger &&
+      pet.attributes.happiness >
+        evolutionSettings.requiredAttributes.happiness &&
+      pet.attributes.health > evolutionSettings.requiredAttributes.health &&
+      pet.attributes.energy > evolutionSettings.requiredAttributes.energy;
+
+    // Only evolve if attributes are good enough or if it's an egg (eggs always evolve)
+    if (canEvolve || pet.stage === PetStage.EGG) {
+      let nextStage = pet.stage;
+
+      // Determine the next stage
+      switch (pet.stage) {
         case PetStage.EGG:
-          newStage = PetStage.BABY;
+          nextStage = PetStage.BABY;
           break;
         case PetStage.BABY:
-          newStage = PetStage.CHILD;
+          nextStage = PetStage.CHILD;
           break;
         case PetStage.CHILD:
-          newStage = PetStage.TEEN;
+          nextStage = PetStage.TEEN;
           break;
         case PetStage.TEEN:
-          newStage = PetStage.ADULT;
+          nextStage = PetStage.ADULT;
           break;
         case PetStage.ADULT:
           // Already at max evolution
-          return prevPet;
+          console.log("Pet is already at max evolution");
+          return;
       }
 
-      return {
-        ...prevPet,
-        stage: newStage,
-        lastEvolutionAge: prevPet.age,
-      };
-    });
+      // Update the pet with the new stage
+      const now = Date.now();
+      const secondsSinceBirth = (now - pet.birthDate) / 1000;
+
+      setPet((prevPet) => {
+        if (!prevPet) return null;
+
+        console.log(`Pet evolved from ${prevPet.stage} to ${nextStage}!`);
+
+        return {
+          ...prevPet,
+          stage: nextStage,
+          lastEvolutionAge: secondsSinceBirth,
+        };
+      });
+    } else {
+      console.log("Pet cannot evolve yet - attributes are too low");
+    }
   };
 
   return (

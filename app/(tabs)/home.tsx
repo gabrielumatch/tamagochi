@@ -10,7 +10,7 @@ import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
 import { router } from "expo-router";
 import Layout from "../../constants/Layout";
-import { PetStage } from "../../contexts/PetContext";
+import { PetStage } from "../../constants/PetTypes";
 import EvolutionStatusBar from "../../components/pet/EvolutionStatusBar";
 
 // Mock user hook until TypeScript resolves the import issue

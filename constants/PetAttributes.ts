@@ -1,4 +1,4 @@
-import { PetStage } from "../contexts/PetContext";
+import { PetStage } from "./PetTypes";
 
 // Pet evolution requirements
 export const EVOLUTION_DAYS = {

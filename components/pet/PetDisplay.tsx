@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
-import { Pet, PetStage } from "../../contexts/PetContext";
+import { Pet, PetStage } from "../../constants/PetTypes";
 import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
 import Layout from "../../constants/Layout";

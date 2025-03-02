@@ -2,19 +2,21 @@ import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
-import { PetAttributes } from "../../contexts/PetContext";
 import { FontAwesome5 } from "@expo/vector-icons";
 import Layout from "../../constants/Layout";
 import { ATTRIBUTE_DECREASE } from "../../constants/GameRules";
 import { usePet } from "../../contexts/PetContext";
+import { getDecreaseRates } from "../../constants/PetSettings";
+import { PetType, PetStage, PetAttributes } from "../../constants/PetTypes";
 
 interface StatusBarProps {
   value: number;
   label: string;
   icon: string;
   color: string;
-  decreaseRate: number; // Points per hour
   attributeName: "health" | "happiness" | "hunger" | "energy";
+  petType: PetType;
+  petStage: PetStage;
 }
 
 function StatusBar({
@@ -22,8 +24,9 @@ function StatusBar({
   label,
   icon,
   color,
-  decreaseRate,
   attributeName,
+  petType,
+  petStage,
 }: StatusBarProps) {
   const [countdown, setCountdown] = useState<string>("00:00");
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
@@ -31,40 +34,25 @@ function StatusBar({
   const shouldDecreaseRef = useRef(false);
   const initializedRef = useRef(false);
 
-  // Calculate time until next decrease (1 point)
+  // Get the decrease settings for this pet type, stage, and attribute
+  const decreaseRates = getDecreaseRates(petType, petStage);
+  const attributeSettings = decreaseRates[attributeName];
+  const pointsToDecrease = attributeSettings.points;
+  const secondsPerDecrease = attributeSettings.seconds;
+
+  // Calculate time until next decrease
   useEffect(() => {
-    // For demo purposes, we'll scale down the time: 1 hour = 60 seconds (for testing)
-    // In a real app, this would use the actual time remaining
-    const timeToDecrease = (60 * 60) / decreaseRate; // seconds per point
-
-    // Use different scaling factors for different attributes to balance the game
-    let scaleFactor = 60; // Default scale: 1 hour = 60 seconds
-
-    // Hunger should decrease more slowly than other attributes for balance
-    if (attributeName === "hunger") {
-      scaleFactor = 120; // 1 hour = 120 seconds for hunger (slower)
-    } else if (attributeName === "happiness") {
-      scaleFactor = 90; // 1 hour = 90 seconds for happiness (medium)
-    } else if (attributeName === "energy") {
-      scaleFactor = 80; // 1 hour = 80 seconds for energy (medium-fast)
-    }
-
-    const scaledTime = Math.floor(timeToDecrease / scaleFactor);
-
-    console.log(`[${label}] Decrease rate: ${decreaseRate} points/hour`);
     console.log(
-      `[${label}] Time to decrease 1 point: ${timeToDecrease.toFixed(
-        2
-      )} seconds`
+      `[${label}] Decrease settings: ${pointsToDecrease} points every ${secondsPerDecrease} seconds`
     );
-    console.log(`[${label}] Scale factor: 1 hour = ${scaleFactor} seconds`);
-    console.log(`[${label}] Scaled time for testing: ${scaledTime} seconds`);
 
     // Initialize the seconds left only once
     if (!initializedRef.current) {
-      setSecondsLeft(scaledTime);
+      setSecondsLeft(secondsPerDecrease);
       initializedRef.current = true;
-      console.log(`[${label}] Timer initialized with ${scaledTime} seconds`);
+      console.log(
+        `[${label}] Timer initialized with ${secondsPerDecrease} seconds`
+      );
     }
 
     // Set up the countdown interval
@@ -75,7 +63,7 @@ function StatusBar({
           shouldDecreaseRef.current = true;
           // Reset the timer when it reaches zero
           console.log(`[${label}] Timer reset, attribute should decrease`);
-          return scaledTime;
+          return secondsPerDecrease;
         }
         return prev - 1;
       });
@@ -83,7 +71,7 @@ function StatusBar({
 
     // Clean up the interval
     return () => clearInterval(interval);
-  }, [decreaseRate, label, attributeName]);
+  }, [label, attributeName, secondsPerDecrease, pointsToDecrease]);
 
   // Handle the actual attribute decrease in a separate effect
   useEffect(() => {
@@ -92,7 +80,9 @@ function StatusBar({
       const timer = setTimeout(() => {
         shouldDecreaseRef.current = false;
 
-        console.log(`[${label}] Decreasing ${attributeName} by 1 point`);
+        console.log(
+          `[${label}] Decreasing ${attributeName} by ${pointsToDecrease} points`
+        );
 
         setPet((prevPet) => {
           if (!prevPet) return null;
@@ -100,26 +90,26 @@ function StatusBar({
           // Create a copy of the attributes
           const updatedAttributes = { ...prevPet.attributes };
 
-          // Decrease the specific attribute by 1 point
+          // Decrease the specific attribute by the specified points
           if (attributeName === "health") {
             updatedAttributes.health = Math.max(
               0,
-              updatedAttributes.health - 1
+              updatedAttributes.health - pointsToDecrease
             );
           } else if (attributeName === "happiness") {
             updatedAttributes.happiness = Math.max(
               0,
-              updatedAttributes.happiness - 1
+              updatedAttributes.happiness - pointsToDecrease
             );
           } else if (attributeName === "hunger") {
             updatedAttributes.hunger = Math.max(
               0,
-              updatedAttributes.hunger - 1
+              updatedAttributes.hunger - pointsToDecrease
             );
           } else if (attributeName === "energy") {
             updatedAttributes.energy = Math.max(
               0,
-              updatedAttributes.energy - 1
+              updatedAttributes.energy - pointsToDecrease
             );
           }
 
@@ -133,7 +123,7 @@ function StatusBar({
 
       return () => clearTimeout(timer);
     }
-  }, [secondsLeft, pet, setPet, attributeName, label]);
+  }, [secondsLeft, pet, setPet, attributeName, label, pointsToDecrease]);
 
   // Format the countdown time
   useEffect(() => {
@@ -178,7 +168,9 @@ function StatusBar({
       </View>
       <View style={styles.valueContainer}>
         <Text style={styles.valueText}>{Math.round(value)}%</Text>
-        <Text style={[styles.countdownText, { color }]}>-1 in {countdown}</Text>
+        <Text style={[styles.countdownText, { color }]}>
+          -{pointsToDecrease} in {countdown}
+        </Text>
       </View>
     </View>
   );
@@ -191,12 +183,19 @@ interface StatusBarsProps {
 export default function StatusBars({ attributes }: StatusBarsProps) {
   const colorScheme = useColorScheme() || "light";
   const colors = Colors[colorScheme];
+  const { pet } = usePet();
+
+  // Default to CAT type and EGG stage if pet is not available
+  const petType = (pet?.type as PetType) || PetType.CAT;
+  const petStage = (pet?.stage as PetStage) || PetStage.EGG;
 
   console.log("StatusBars rendered with attributes:", {
     health: attributes.health.toFixed(2),
     happiness: attributes.happiness.toFixed(2),
     hunger: attributes.hunger.toFixed(2),
     energy: attributes.energy.toFixed(2),
+    petType,
+    petStage,
   });
 
   return (
@@ -206,32 +205,36 @@ export default function StatusBars({ attributes }: StatusBarsProps) {
         label="Health"
         icon="heart"
         color={colors.health}
-        decreaseRate={ATTRIBUTE_DECREASE.HEALTH_WHEN_CRITICAL}
         attributeName="health"
+        petType={petType}
+        petStage={petStage}
       />
       <StatusBar
         value={attributes.happiness}
         label="Happiness"
         icon="smile"
         color={colors.happiness}
-        decreaseRate={ATTRIBUTE_DECREASE.HAPPINESS}
         attributeName="happiness"
+        petType={petType}
+        petStage={petStage}
       />
       <StatusBar
         value={attributes.hunger}
         label="Hunger"
         icon="utensils"
         color={colors.hunger}
-        decreaseRate={ATTRIBUTE_DECREASE.HUNGER}
         attributeName="hunger"
+        petType={petType}
+        petStage={petStage}
       />
       <StatusBar
         value={attributes.energy}
         label="Energy"
         icon="bolt"
         color={colors.energy}
-        decreaseRate={ATTRIBUTE_DECREASE.ENERGY}
         attributeName="energy"
+        petType={petType}
+        petStage={petStage}
       />
     </View>
   );

@@ -1,8 +1,13 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
-import { usePet, PetStage } from "../../contexts/PetContext";
+import { usePet } from "../../contexts/PetContext";
 import { EVOLUTION, THRESHOLDS, TIME } from "../../constants/GameRules";
 import { DimensionValue } from "react-native";
+import {
+  getEvolutionSettings,
+  ATTRIBUTE_THRESHOLDS,
+} from "../../constants/PetSettings";
+import { PetType, PetStage } from "../../constants/PetTypes";
 
 interface EvolutionStatusBarProps {
   showLabel?: boolean;
@@ -50,8 +55,8 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   const evolutionInfo = useMemo(() => {
     if (!pet)
       return {
-        daysLeft: 0,
-        totalDays: 0,
+        secondsLeft: 0,
+        totalSeconds: 0,
         progress: 0,
         canEvolve: false,
         nextStage: "",
@@ -59,32 +64,34 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
         secondsUntilEvolution: 0,
       };
 
-    // Determine current stage and days needed for next evolution
-    let daysNeeded = 0;
+    // Ensure we have valid pet type and stage, defaulting to "cat" and "egg" if undefined
+    const petType = (pet.type as PetType) || PetType.CAT;
+    const petStage = (pet.stage as PetStage) || PetStage.EGG;
+
+    // Get evolution settings for this pet type and stage
+    const evolutionSettings = getEvolutionSettings(petType, petStage);
+
+    // Determine current stage and next stage
     let nextStage = "";
 
-    switch (pet.stage) {
+    switch (petStage) {
       case PetStage.EGG:
-        daysNeeded = EVOLUTION.DAYS_TO_EVOLVE.EGG_TO_BABY;
         nextStage = PetStage.BABY;
         break;
       case PetStage.BABY:
-        daysNeeded = EVOLUTION.DAYS_TO_EVOLVE.BABY_TO_CHILD;
         nextStage = PetStage.CHILD;
         break;
       case PetStage.CHILD:
-        daysNeeded = EVOLUTION.DAYS_TO_EVOLVE.CHILD_TO_TEEN;
         nextStage = PetStage.TEEN;
         break;
       case PetStage.TEEN:
-        daysNeeded = EVOLUTION.DAYS_TO_EVOLVE.TEEN_TO_ADULT;
         nextStage = PetStage.ADULT;
         break;
       case PetStage.ADULT:
         // Already at max evolution
         return {
-          daysLeft: 0,
-          totalDays: 0,
+          secondsLeft: 0,
+          totalSeconds: 0,
           progress: 1, // Full progress
           canEvolve: false,
           nextStage: "Max Level",
@@ -93,8 +100,8 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
         };
       default:
         return {
-          daysLeft: 0,
-          totalDays: 0,
+          secondsLeft: 0,
+          totalSeconds: 0,
           progress: 0,
           canEvolve: false,
           nextStage: "",
@@ -103,37 +110,38 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
         };
     }
 
-    // Calculate days passed since last evolution
-    const daysPassed = pet.age - pet.lastEvolutionAge;
+    // Calculate seconds passed since last evolution (for testing)
+    const now = Date.now();
+    const secondsPassed = (now - pet.birthDate) / 1000 - pet.lastEvolutionAge;
 
-    // Calculate days left and progress
-    const daysLeft = Math.max(0, daysNeeded - daysPassed);
-    const progress = daysNeeded > 0 ? Math.min(1, daysPassed / daysNeeded) : 1;
+    // Get total seconds needed for evolution
+    const totalSeconds = evolutionSettings.timeToEvolve;
 
-    // Calculate seconds until evolution (for real-time countdown)
-    // In a real app, this would use the actual time remaining
-    // For demo purposes, we'll use a scaled-down version where 1 day = 60 seconds
-    const secondsUntilEvolution = Math.max(0, Math.floor(daysLeft * 60));
+    // Calculate seconds left and progress
+    const secondsLeft = Math.max(0, totalSeconds - secondsPassed);
+    const progress =
+      totalSeconds > 0 ? Math.min(1, secondsPassed / totalSeconds) : 1;
 
-    // Check if pet can evolve (all attributes above threshold and enough days have passed)
+    // Check if pet can evolve (all attributes above threshold and enough time has passed)
     const canEvolve =
       progress >= 1 &&
-      pet.attributes.hunger > THRESHOLDS.LOW &&
-      pet.attributes.happiness > THRESHOLDS.LOW &&
-      pet.attributes.health > THRESHOLDS.LOW &&
-      pet.attributes.energy > THRESHOLDS.LOW;
+      pet.attributes.hunger > evolutionSettings.requiredAttributes.hunger &&
+      pet.attributes.happiness >
+        evolutionSettings.requiredAttributes.happiness &&
+      pet.attributes.health > evolutionSettings.requiredAttributes.health &&
+      pet.attributes.energy > evolutionSettings.requiredAttributes.energy;
 
-    // Special case for egg - it should evolve immediately
+    // Special case for egg
     const isEgg = pet.stage === PetStage.EGG;
 
     return {
-      daysLeft,
-      totalDays: daysNeeded,
-      progress: isEgg ? 0 : progress, // Eggs should show 0 progress until they hatch
-      canEvolve: isEgg ? false : canEvolve, // Eggs can't evolve until the timer triggers it
+      secondsLeft,
+      totalSeconds,
+      progress: progress,
+      canEvolve,
       nextStage: nextStage.charAt(0).toUpperCase() + nextStage.slice(1), // Capitalize
       isEgg,
-      secondsUntilEvolution: isEgg ? 30 : secondsUntilEvolution, // Eggs hatch in 30 seconds for demo
+      secondsUntilEvolution: secondsLeft,
     };
   }, [pet]);
 
@@ -143,10 +151,7 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
 
     // Initialize the seconds left only once per evolution info change
     if (!initializedRef.current) {
-      // For eggs, use a shorter countdown for testing (30 seconds)
-      const seconds = evolutionInfo.isEgg
-        ? 30
-        : evolutionInfo.secondsUntilEvolution;
+      const seconds = evolutionInfo.secondsUntilEvolution;
       setSecondsLeft(seconds);
       initializedRef.current = true;
       console.log(
@@ -250,14 +255,8 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
       return "Max evolution reached";
     }
 
-    if (evolutionInfo.progress >= 1) {
-      return `Waiting for attributes to improve`;
-    }
-
-    return `${evolutionInfo.daysLeft} day${
-      evolutionInfo.daysLeft !== 1 ? "s" : ""
-    } until ${evolutionInfo.nextStage}`;
-  }, [evolutionInfo, pet]);
+    return `Evolving to ${evolutionInfo.nextStage} in ${countdown}`;
+  }, [pet, evolutionInfo, countdown]);
 
   // Determine the color of the progress bar
   const progressColor = useMemo(() => {

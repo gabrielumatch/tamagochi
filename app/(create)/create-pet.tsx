@@ -7,7 +7,8 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import { usePet, PetStage } from "../../contexts/PetContext";
+import { usePet } from "../../contexts/PetContext";
+import { PetType } from "../../constants/PetTypes";
 // import { useUser } from "../../contexts/UserContext";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
@@ -92,7 +93,7 @@ export default function CreatePetScreen() {
 
     try {
       // Create the new pet
-      createPet(petName.trim());
+      createPet(petName.trim(), selectedType as PetType);
 
       // Give the user some starting coins
       addCoins(100);
