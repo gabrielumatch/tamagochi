@@ -1,5 +1,10 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  EVOLUTION,
+  ATTRIBUTE_DECREASE,
+  CARE_ACTIONS,
+} from "../constants/GameRules";
 
 // Define pet growth stages
 export enum PetStage {
@@ -20,12 +25,26 @@ export interface PetAttributes {
   lastUpdated: number;
 }
 
+// Helper function to generate a unique ID
+const generateId = () => {
+  return (
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15)
+  );
+};
+
 // Define pet interface
 export interface Pet {
+  id: string;
   name: string;
-  stage: PetStage;
+  type: string;
+  stage: string;
   attributes: PetAttributes;
   birthDate: number;
+  lastEvolutionAge: number;
+  age: number;
+  createdAt: number;
+  lastInteraction: number;
 }
 
 // Define context interface
@@ -39,6 +58,7 @@ interface PetContextType {
   cleanPet: () => void;
   putPetToSleep: () => void;
   updatePetAttributes: () => void;
+  evolvePet: () => void;
 }
 
 // Create context with default values
@@ -52,6 +72,7 @@ const PetContext = createContext<PetContextType>({
   cleanPet: () => {},
   putPetToSleep: () => {},
   updatePetAttributes: () => {},
+  evolvePet: () => {},
 });
 
 // Create provider component
@@ -103,13 +124,19 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (hoursPassed < 0.01) return; // Only update if at least 36 seconds have passed
 
-    // Calculate attribute decreases based on time
-    const hungerDecrease = Math.min(pet.attributes.hunger, 5 * hoursPassed);
+    // Calculate attribute decreases based on time using constants
+    const hungerDecrease = Math.min(
+      pet.attributes.hunger,
+      ATTRIBUTE_DECREASE.HUNGER * hoursPassed
+    );
     const happinessDecrease = Math.min(
       pet.attributes.happiness,
-      3 * hoursPassed
+      ATTRIBUTE_DECREASE.HAPPINESS * hoursPassed
     );
-    const energyDecrease = Math.min(pet.attributes.energy, 2 * hoursPassed);
+    const energyDecrease = Math.min(
+      pet.attributes.energy,
+      ATTRIBUTE_DECREASE.ENERGY * hoursPassed
+    );
 
     // Update pet attributes
     setPet((prevPet) => {
@@ -129,34 +156,72 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       // Check if pet should evolve based on age
       const daysSinceBirth = (now - prevPet.birthDate) / (1000 * 60 * 60 * 24);
       let stage = prevPet.stage;
+      let lastEvolutionAge = prevPet.lastEvolutionAge;
+      const age = Math.floor(daysSinceBirth);
 
-      if (daysSinceBirth >= 10 && stage === PetStage.TEEN) {
-        stage = PetStage.ADULT;
-      } else if (daysSinceBirth >= 5 && stage === PetStage.CHILD) {
-        stage = PetStage.TEEN;
-      } else if (daysSinceBirth >= 2 && stage === PetStage.BABY) {
-        stage = PetStage.CHILD;
-      } else if (daysSinceBirth >= 0.5 && stage === PetStage.EGG) {
-        stage = PetStage.BABY;
+      // Check if attributes are good enough for evolution
+      const canEvolve =
+        updatedAttributes.hunger >
+          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE &&
+        updatedAttributes.happiness >
+          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE &&
+        updatedAttributes.health >
+          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE &&
+        updatedAttributes.energy >
+          EVOLUTION.REQUIREMENTS.MIN_ATTRIBUTE_PERCENTAGE;
+
+      // Only evolve if attributes are good enough
+      if (canEvolve) {
+        if (
+          age >= EVOLUTION.DAYS_TO_EVOLVE.TEEN_TO_ADULT &&
+          stage === PetStage.TEEN
+        ) {
+          stage = PetStage.ADULT;
+          lastEvolutionAge = age;
+        } else if (
+          age >= EVOLUTION.DAYS_TO_EVOLVE.CHILD_TO_TEEN &&
+          stage === PetStage.CHILD
+        ) {
+          stage = PetStage.TEEN;
+          lastEvolutionAge = age;
+        } else if (
+          age >= EVOLUTION.DAYS_TO_EVOLVE.BABY_TO_CHILD &&
+          stage === PetStage.BABY
+        ) {
+          stage = PetStage.CHILD;
+          lastEvolutionAge = age;
+        }
       }
+
+      // Egg always evolves to baby after half a day, regardless of attributes
+      if (age >= 0.5 && stage === PetStage.EGG) {
+        stage = PetStage.BABY;
+        lastEvolutionAge = age;
+      }
+
+      // Update attributes with age
+      const finalAttributes = {
+        ...updatedAttributes,
+        age: age,
+      };
 
       return {
         ...prevPet,
         stage,
-        attributes: updatedAttributes,
-        // Increment age if a day has passed
-        attributes: {
-          ...updatedAttributes,
-          age: Math.floor(daysSinceBirth),
-        },
+        age,
+        lastEvolutionAge,
+        attributes: finalAttributes,
       };
     });
   };
 
   // Create a new pet
   const createPet = (name: string) => {
+    const now = Date.now();
     const newPet: Pet = {
+      id: generateId(),
       name,
+      type: "default",
       stage: PetStage.EGG,
       attributes: {
         health: 100,
@@ -164,9 +229,13 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         hunger: 100,
         energy: 100,
         age: 0,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
       },
-      birthDate: Date.now(),
+      birthDate: now,
+      lastEvolutionAge: 0,
+      age: 0,
+      createdAt: now,
+      lastInteraction: now,
     };
 
     setPet(newPet);
@@ -270,6 +339,41 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
+  // Function to manually evolve the pet (for testing)
+  const evolvePet = () => {
+    if (!pet) return;
+
+    setPet((prevPet) => {
+      if (!prevPet) return null;
+
+      let newStage = prevPet.stage;
+
+      switch (prevPet.stage) {
+        case PetStage.EGG:
+          newStage = PetStage.BABY;
+          break;
+        case PetStage.BABY:
+          newStage = PetStage.CHILD;
+          break;
+        case PetStage.CHILD:
+          newStage = PetStage.TEEN;
+          break;
+        case PetStage.TEEN:
+          newStage = PetStage.ADULT;
+          break;
+        case PetStage.ADULT:
+          // Already at max evolution
+          return prevPet;
+      }
+
+      return {
+        ...prevPet,
+        stage: newStage,
+        lastEvolutionAge: prevPet.age,
+      };
+    });
+  };
+
   return (
     <PetContext.Provider
       value={{
@@ -282,6 +386,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         cleanPet,
         putPetToSleep,
         updatePetAttributes,
+        evolvePet,
       }}
     >
       {children}

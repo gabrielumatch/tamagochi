@@ -11,6 +11,7 @@ import { useColorScheme } from "react-native";
 import { router } from "expo-router";
 import Layout from "../../constants/Layout";
 import { PetStage } from "../../contexts/PetContext";
+import EvolutionStatusBar from "../../components/pet/EvolutionStatusBar";
 
 // Mock user hook until TypeScript resolves the import issue
 const useUser = () => {
@@ -40,7 +41,8 @@ const useUser = () => {
 };
 
 export default function HomeScreen() {
-  const { pet, isLoading, updatePetAttributes, createPet } = usePet();
+  const { pet, isLoading, updatePetAttributes, createPet, evolvePet } =
+    usePet();
   const { user } = useUser();
   const colorScheme = useColorScheme() || "light";
   const colors = Colors[colorScheme];
@@ -134,6 +136,11 @@ export default function HomeScreen() {
         <StatusBars attributes={pet.attributes} />
       </Card>
 
+      {/* Add the Evolution Status Bar */}
+      <View style={styles.evolutionContainer}>
+        <EvolutionStatusBar />
+      </View>
+
       {/* Quick Actions */}
       <Card style={styles.actionsCard}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -180,7 +187,7 @@ export default function HomeScreen() {
               Age
             </Text>
             <Text style={[styles.statValue, { color: colors.text }]}>
-              {pet.attributes.age} {pet.attributes.age === 1 ? "day" : "days"}
+              {pet.age} {pet.age === 1 ? "day" : "days"}
             </Text>
           </View>
           <View style={styles.statItem}>
@@ -192,6 +199,23 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
+      </Card>
+
+      {/* Debug Evolution Button (for testing) */}
+      <Card style={styles.debugCard}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Debug Controls
+        </Text>
+        <Button
+          title="Force Evolution"
+          type="outline"
+          onPress={evolvePet}
+          style={styles.debugButton}
+        />
+        <Text style={[styles.debugText, { color: colors.text + "99" }]}>
+          This button is for testing only. It forces your pet to evolve to the
+          next stage.
+        </Text>
       </Card>
     </ScrollView>
   );
@@ -258,5 +282,19 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 16,
     fontWeight: "bold",
+  },
+  evolutionContainer: {
+    marginVertical: 10,
+    paddingHorizontal: 16,
+  },
+  debugCard: {
+    padding: Layout.spacing.md,
+  },
+  debugButton: {
+    marginVertical: Layout.spacing.sm,
+  },
+  debugText: {
+    fontSize: 12,
+    fontStyle: "italic",
   },
 });
