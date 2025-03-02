@@ -30,6 +30,15 @@ interface ShopItem {
 // Shop items data
 const SHOP_ITEMS: ShopItem[] = [
   {
+    id: "resurrection_stone",
+    name: "Resurrection Stone",
+    description: "A magical stone that can bring your pet back to life.",
+    price: 200,
+    icon: "gem",
+    category: "decoration",
+    effect: "Revives your pet if it dies",
+  },
+  {
     id: "premium_food",
     name: "Premium Food",
     description: "High-quality food that provides better nutrition.",

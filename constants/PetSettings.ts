@@ -53,6 +53,7 @@ interface PetTypeSettings {
   child: PetStageSettings;
   teen: PetStageSettings;
   adult: PetStageSettings;
+  dead: PetStageSettings;
 }
 
 // Master settings object for all pet types and stages
@@ -153,6 +154,25 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
       emoji: "😻",
       displayName: "Adult Cat",
     },
+    dead: {
+      decreaseRates: {
+        health: { points: 0, seconds: 999 },
+        happiness: { points: 0, seconds: 999 },
+        hunger: { points: 0, seconds: 999 },
+        energy: { points: 0, seconds: 999 },
+      },
+      evolution: {
+        timeToEvolve: 0, // No evolution from dead
+        requiredAttributes: {
+          health: 0,
+          happiness: 0,
+          hunger: 0,
+          energy: 0,
+        },
+      },
+      emoji: "💀",
+      displayName: "Dead Cat",
+    },
   },
 
   dog: {
@@ -250,6 +270,25 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
       },
       emoji: "🦮",
       displayName: "Adult Dog",
+    },
+    dead: {
+      decreaseRates: {
+        health: { points: 0, seconds: 999 },
+        happiness: { points: 0, seconds: 999 },
+        hunger: { points: 0, seconds: 999 },
+        energy: { points: 0, seconds: 999 },
+      },
+      evolution: {
+        timeToEvolve: 0, // No evolution from dead
+        requiredAttributes: {
+          health: 0,
+          happiness: 0,
+          hunger: 0,
+          energy: 0,
+        },
+      },
+      emoji: "💀",
+      displayName: "Dead Dog",
     },
   },
 
@@ -349,6 +388,25 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
       emoji: "🦅",
       displayName: "Adult Bird",
     },
+    dead: {
+      decreaseRates: {
+        health: { points: 0, seconds: 999 },
+        happiness: { points: 0, seconds: 999 },
+        hunger: { points: 0, seconds: 999 },
+        energy: { points: 0, seconds: 999 },
+      },
+      evolution: {
+        timeToEvolve: 0, // No evolution from dead
+        requiredAttributes: {
+          health: 0,
+          happiness: 0,
+          hunger: 0,
+          energy: 0,
+        },
+      },
+      emoji: "💀",
+      displayName: "Dead Bird",
+    },
   },
 
   dragon: {
@@ -447,6 +505,25 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
       emoji: "🐉",
       displayName: "Adult Dragon",
     },
+    dead: {
+      decreaseRates: {
+        health: { points: 0, seconds: 999 },
+        happiness: { points: 0, seconds: 999 },
+        hunger: { points: 0, seconds: 999 },
+        energy: { points: 0, seconds: 999 },
+      },
+      evolution: {
+        timeToEvolve: 0, // No evolution from dead
+        requiredAttributes: {
+          health: 0,
+          happiness: 0,
+          hunger: 0,
+          energy: 0,
+        },
+      },
+      emoji: "💀",
+      displayName: "Dead Dragon",
+    },
   },
 };
 
@@ -479,6 +556,16 @@ export function getEvolutionSettings(
   const type = petType ? (petType as string) : PetType.CAT;
   const stageKey = stage as keyof PetTypeSettings;
   return PET_SETTINGS[type][stageKey].evolution;
+}
+
+export function getPetEmoji(
+  petType: PetType | string,
+  stage: PetStage | string
+): string {
+  // Default to cat if petType is undefined
+  const type = petType ? (petType as string) : PetType.CAT;
+  const stageKey = stage as keyof PetTypeSettings;
+  return PET_SETTINGS[type][stageKey].emoji;
 }
 
 // Constants for critical thresholds

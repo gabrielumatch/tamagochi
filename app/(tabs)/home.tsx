@@ -68,6 +68,13 @@ export default function HomeScreen() {
     };
   }, [pet, updatePetAttributes]);
 
+  // Check if pet is dead and redirect to game-over modal
+  useEffect(() => {
+    if (pet && pet.stage === PetStage.DEAD) {
+      router.push("/(modals)/game-over");
+    }
+  }, [pet]);
+
   // Navigation handlers
   const navigateToCreatePet = () => {
     router.push("/(create)/create-pet");

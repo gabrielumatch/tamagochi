@@ -5,6 +5,7 @@ import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
 import Layout from "../../constants/Layout";
 import { THRESHOLDS } from "../../constants/GameRules";
+import { getPetEmoji as getPetEmojiFromSettings } from "../../constants/PetSettings";
 
 // Pet emojis for different stages
 const petEmojis = {
@@ -13,6 +14,7 @@ const petEmojis = {
   [PetStage.CHILD]: "🐥",
   [PetStage.TEEN]: "🐤",
   [PetStage.ADULT]: "🐔",
+  [PetStage.DEAD]: "💀",
 };
 
 // Stage names for display
@@ -22,6 +24,7 @@ const stageNames = {
   [PetStage.CHILD]: "Child",
   [PetStage.TEEN]: "Teen",
   [PetStage.ADULT]: "Adult",
+  [PetStage.DEAD]: "Dead",
 };
 
 // Mood emojis based on overall pet condition
@@ -219,9 +222,14 @@ export default function PetDisplay({
     outputRange: ["-30deg", "30deg"],
   });
 
-  // Get the appropriate emoji based on pet stage
+  // Get the appropriate emoji based on pet stage and type
   const getPetEmoji = () => {
-    return petEmojis[pet.stage as PetStage] || "🥚";
+    // Use the pet type and stage to get the correct emoji
+    return (
+      getPetEmojiFromSettings(pet.type, pet.stage) ||
+      petEmojis[pet.stage as PetStage] ||
+      "🥚"
+    );
   };
 
   // Add sleeping indicator if the pet is sleeping

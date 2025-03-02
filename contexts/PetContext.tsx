@@ -32,6 +32,7 @@ interface PetContextType {
   putPetToSleep: () => void;
   updatePetAttributes: () => void;
   evolvePet: () => void;
+  resurrectPet: () => void;
 }
 
 // Create context with default values
@@ -46,6 +47,7 @@ const PetContext = createContext<PetContextType>({
   putPetToSleep: () => {},
   updatePetAttributes: () => {},
   evolvePet: () => {},
+  resurrectPet: () => {},
 });
 
 // Create provider component
@@ -108,6 +110,9 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
   // Update pet attributes based on time passed
   const updatePetAttributes = () => {
     if (!pet) return;
+
+    // Skip updates if pet is already dead
+    if (pet.stage === PetStage.DEAD) return;
 
     const now = Date.now();
     const hoursPassed = (now - pet.attributes.lastUpdated) / (1000 * 60 * 60);
@@ -211,6 +216,22 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log("- Happiness:", updatedAttributes.happiness.toFixed(2));
       console.log("- Energy:", updatedAttributes.energy.toFixed(2));
       console.log("- Health:", updatedAttributes.health.toFixed(2));
+
+      // Check if pet should die (health at 0 or all attributes critically low)
+      const isDead =
+        updatedAttributes.health <= 0 ||
+        (updatedAttributes.hunger <= 5 &&
+          updatedAttributes.happiness <= 5 &&
+          updatedAttributes.energy <= 5);
+
+      if (isDead && prevPet.stage !== PetStage.DEAD) {
+        console.log("Pet has died due to neglect!");
+        return {
+          ...prevPet,
+          stage: PetStage.DEAD,
+          attributes: updatedAttributes,
+        };
+      }
 
       // Check if pet should evolve based on age and settings
       const daysSinceBirth = (now - prevPet.birthDate) / (1000 * 60 * 60 * 24);
@@ -472,6 +493,40 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Resurrect the pet
+  const resurrectPet = () => {
+    if (!pet || pet.stage !== PetStage.DEAD) return;
+
+    setPet((prevPet) => {
+      if (!prevPet) return null;
+
+      // Determine which stage to resurrect to based on age
+      let resurrectedStage = PetStage.BABY;
+      if (prevPet.age >= 10) {
+        resurrectedStage = PetStage.ADULT;
+      } else if (prevPet.age >= 5) {
+        resurrectedStage = PetStage.TEEN;
+      } else if (prevPet.age >= 2) {
+        resurrectedStage = PetStage.CHILD;
+      }
+
+      console.log(`Pet resurrected from death to ${resurrectedStage}!`);
+
+      return {
+        ...prevPet,
+        stage: resurrectedStage,
+        attributes: {
+          ...prevPet.attributes,
+          health: 50,
+          happiness: 50,
+          hunger: 50,
+          energy: 50,
+          lastUpdated: Date.now(),
+        },
+      };
+    });
+  };
+
   return (
     <PetContext.Provider
       value={{
@@ -485,6 +540,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         putPetToSleep,
         updatePetAttributes,
         evolvePet,
+        resurrectPet,
       }}
     >
       {children}
