@@ -49,18 +49,23 @@ export default function HomeScreen() {
 
   // Update pet attributes when the screen is focused
   useEffect(() => {
+    console.log("Home screen mounted, updating pet attributes");
     if (pet) {
       updatePetAttributes();
     }
 
-    // Set up an interval to update pet attributes every minute
+    // Set up an interval to update pet attributes every 10 seconds (for testing)
     const interval = setInterval(() => {
+      console.log("Interval triggered, updating pet attributes");
       if (pet) {
         updatePetAttributes();
       }
-    }, 60000);
+    }, 10000); // Changed from 60000 (1 minute) to 10000 (10 seconds) for testing
 
-    return () => clearInterval(interval);
+    return () => {
+      console.log("Home screen unmounted, clearing interval");
+      clearInterval(interval);
+    };
   }, [pet, updatePetAttributes]);
 
   // Navigation handlers

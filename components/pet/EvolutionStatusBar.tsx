@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { usePet, PetStage } from "../../contexts/PetContext";
 import { EVOLUTION, THRESHOLDS, TIME } from "../../constants/GameRules";
 import { DimensionValue } from "react-native";
@@ -19,9 +19,33 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   height = 12,
   width = "100%",
 }) => {
-  const { pet } = usePet();
-  const [countdown, setCountdown] = useState<string>("");
+  const { pet, evolvePet } = usePet();
+  const [countdown, setCountdown] = useState<string>("00:00:00");
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
+  const initializedRef = useRef(false);
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+
+  // Start pulsing animation
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.4,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    return () => {
+      pulseAnim.stopAnimation();
+    };
+  }, [pulseAnim]);
 
   const evolutionInfo = useMemo(() => {
     if (!pet)
@@ -117,14 +141,27 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   useEffect(() => {
     if (!pet) return;
 
-    // Initialize the seconds left
-    setSecondsLeft(evolutionInfo.secondsUntilEvolution);
+    // Initialize the seconds left only once per evolution info change
+    if (!initializedRef.current) {
+      // For eggs, use a shorter countdown for testing (30 seconds)
+      const seconds = evolutionInfo.isEgg
+        ? 30
+        : evolutionInfo.secondsUntilEvolution;
+      setSecondsLeft(seconds);
+      initializedRef.current = true;
+      console.log(
+        `[Evolution] Timer initialized with ${seconds} seconds until ${
+          evolutionInfo.isEgg ? "hatching" : "evolution"
+        }`
+      );
+    }
 
     // Set up the countdown interval
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 0) {
           clearInterval(interval);
+          console.log(`[Evolution] Countdown reached zero`);
           return 0;
         }
         return prev - 1;
@@ -132,8 +169,33 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
     }, 1000);
 
     // Clean up the interval
-    return () => clearInterval(interval);
-  }, [evolutionInfo.secondsUntilEvolution, pet]);
+    return () => {
+      clearInterval(interval);
+      console.log(`[Evolution] Countdown interval cleared`);
+    };
+  }, [evolutionInfo.secondsUntilEvolution, pet, evolutionInfo.isEgg]);
+
+  // Reset initialization when evolution info changes
+  useEffect(() => {
+    initializedRef.current = false;
+  }, [evolutionInfo.secondsUntilEvolution]);
+
+  // Trigger evolution when countdown reaches zero
+  useEffect(() => {
+    if (secondsLeft === 0 && pet) {
+      // For eggs or when the pet can evolve, trigger evolution
+      if (evolutionInfo.isEgg || evolutionInfo.canEvolve) {
+        console.log(
+          `[Evolution] Triggering evolution to ${evolutionInfo.nextStage}`
+        );
+        // Add a small delay to make the UI update visible
+        const timer = setTimeout(() => {
+          evolvePet();
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [secondsLeft, evolutionInfo, pet, evolvePet]);
 
   // Format the countdown time
   useEffect(() => {
@@ -163,6 +225,13 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
     const formattedSeconds = seconds.toString().padStart(2, "0");
 
     setCountdown(`${formattedHours}:${formattedMinutes}:${formattedSeconds}`);
+
+    // Log countdown every 10 seconds to avoid console spam
+    if (secondsLeft % 10 === 0 || secondsLeft <= 5) {
+      console.log(
+        `[Evolution] Countdown: ${formattedHours}:${formattedMinutes}:${formattedSeconds}`
+      );
+    }
   }, [secondsLeft, evolutionInfo, pet]);
 
   // Format the time left string
@@ -192,14 +261,18 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
 
   // Determine the color of the progress bar
   const progressColor = useMemo(() => {
-    if (evolutionInfo.isEgg) return "#E91E63"; // Pink for egg
+    if (evolutionInfo.isEgg) {
+      // For eggs, show a pulsing progress based on the countdown
+      const progress = 1 - secondsLeft / 30; // Assuming 30 seconds for egg hatching
+      return `rgba(233, 30, 99, ${0.5 + progress * 0.5})`; // Pink with varying opacity
+    }
     if (evolutionInfo.canEvolve) return "#4CAF50"; // Green
     if (evolutionInfo.progress >= 1) return "#FFC107"; // Yellow (waiting for attributes)
     if (evolutionInfo.progress >= 0.75) return "#8BC34A"; // Light green
     if (evolutionInfo.progress >= 0.5) return "#2196F3"; // Blue
     if (evolutionInfo.progress >= 0.25) return "#9C27B0"; // Purple
     return "#E91E63"; // Pink
-  }, [evolutionInfo]);
+  }, [evolutionInfo, secondsLeft]);
 
   if (!pet) return null;
 
@@ -212,16 +285,33 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
         </View>
       )}
       <View style={[styles.barContainer, { height, width }]}>
-        <View
-          style={[
-            styles.progressBar,
-            {
-              width: `${evolutionInfo.progress * 100}%`,
-              backgroundColor: progressColor,
-            },
-          ]}
-        />
-        {evolutionInfo.canEvolve && <View style={styles.pulseOverlay} />}
+        {evolutionInfo.isEgg ? (
+          // For eggs, show a special hatching progress bar
+          <View
+            style={[
+              styles.progressBar,
+              {
+                width: `${(1 - secondsLeft / 30) * 100}%`, // Assuming 30 seconds for egg hatching
+                backgroundColor: progressColor,
+              },
+            ]}
+          />
+        ) : (
+          <View
+            style={[
+              styles.progressBar,
+              {
+                width: `${evolutionInfo.progress * 100}%`,
+                backgroundColor: progressColor,
+              },
+            ]}
+          />
+        )}
+        {(evolutionInfo.canEvolve || secondsLeft <= 5) && (
+          <Animated.View
+            style={[styles.pulseOverlay, { opacity: pulseAnim }]}
+          />
+        )}
       </View>
     </View>
   );
@@ -261,8 +351,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
-    opacity: 0.7,
-    // Add animation in a real implementation
   },
 });
 

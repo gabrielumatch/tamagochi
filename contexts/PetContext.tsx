@@ -106,11 +106,28 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       if (pet) {
         try {
           await AsyncStorage.setItem("pet", JSON.stringify(pet));
+          console.log("Pet data saved to storage");
         } catch (error) {
           console.error("Failed to save pet data:", error);
         }
       }
     };
+
+    if (pet) {
+      console.log("Pet state changed:", {
+        stage: pet.stage,
+        age: pet.age,
+        attributes: {
+          health: pet.attributes.health.toFixed(2),
+          happiness: pet.attributes.happiness.toFixed(2),
+          hunger: pet.attributes.hunger.toFixed(2),
+          energy: pet.attributes.energy.toFixed(2),
+          lastUpdated: new Date(
+            pet.attributes.lastUpdated
+          ).toLocaleTimeString(),
+        },
+      });
+    }
 
     savePet();
   }, [pet]);
@@ -122,7 +139,18 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     const now = Date.now();
     const hoursPassed = (now - pet.attributes.lastUpdated) / (1000 * 60 * 60);
 
-    if (hoursPassed < 0.01) return; // Only update if at least 36 seconds have passed
+    console.log("===== PET UPDATE =====");
+    console.log(
+      "Last updated:",
+      new Date(pet.attributes.lastUpdated).toLocaleTimeString()
+    );
+    console.log("Current time:", new Date(now).toLocaleTimeString());
+    console.log("Hours passed:", hoursPassed);
+
+    if (hoursPassed < 0.001) {
+      console.log("Not enough time passed, skipping update");
+      return; // Only update if at least 3.6 seconds have passed
+    }
 
     // Calculate attribute decreases based on time using constants
     const hungerDecrease = Math.min(
@@ -138,6 +166,11 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       ATTRIBUTE_DECREASE.ENERGY * hoursPassed
     );
 
+    console.log("Attribute decreases:");
+    console.log("- Hunger:", hungerDecrease.toFixed(2));
+    console.log("- Happiness:", happinessDecrease.toFixed(2));
+    console.log("- Energy:", energyDecrease.toFixed(2));
+
     // Update pet attributes
     setPet((prevPet) => {
       if (!prevPet) return null;
@@ -152,6 +185,11 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         energy: Math.max(0, prevPet.attributes.energy - energyDecrease),
         lastUpdated: now,
       };
+
+      console.log("Updated attributes:");
+      console.log("- Hunger:", updatedAttributes.hunger.toFixed(2));
+      console.log("- Happiness:", updatedAttributes.happiness.toFixed(2));
+      console.log("- Energy:", updatedAttributes.energy.toFixed(2));
 
       // Check if pet should evolve based on age
       const daysSinceBirth = (now - prevPet.birthDate) / (1000 * 60 * 60 * 24);
