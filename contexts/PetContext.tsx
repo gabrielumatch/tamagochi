@@ -256,16 +256,22 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       const secondsSinceLastEvolution =
         (now - prevPet.birthDate) / 1000 - prevPet.lastEvolutionAge;
 
+      // Add a safety check - if the pet was recently resurrected, don't evolve immediately
+      const timeSinceLastUpdate = (now - prevPet.attributes.lastUpdated) / 1000;
+      const recentlyUpdated = timeSinceLastUpdate < 5; // Less than 5 seconds since last update
+
       console.log("Evolution check:");
       console.log("- Current stage:", stage);
       console.log("- Seconds since last evolution:", secondsSinceLastEvolution);
       console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
       console.log("- Can evolve based on attributes:", canEvolve);
+      console.log("- Recently updated:", recentlyUpdated);
 
-      // Only evolve if attributes are good enough and enough time has passed
+      // Only evolve if attributes are good enough, enough time has passed, and not recently updated
       if (
         canEvolve &&
-        secondsSinceLastEvolution >= evolutionSettings.timeToEvolve
+        secondsSinceLastEvolution >= evolutionSettings.timeToEvolve &&
+        !recentlyUpdated
       ) {
         if (stage === PetStage.TEEN) {
           stage = PetStage.ADULT;
@@ -497,6 +503,9 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     setPet((prevPet) => {
       if (!prevPet) return null;
 
+      const now = Date.now();
+      const secondsSinceBirth = (now - prevPet.birthDate) / 1000;
+
       // Determine which stage to resurrect to based on age
       let resurrectedStage = PetStage.BABY;
       if (prevPet.age >= 10) {
@@ -509,16 +518,18 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
       console.log(`Pet resurrected from death to ${resurrectedStage}!`);
 
+      // Reset the evolution timer by setting lastEvolutionAge to current time
       return {
         ...prevPet,
         stage: resurrectedStage,
+        lastEvolutionAge: secondsSinceBirth, // Reset evolution timer
         attributes: {
           ...prevPet.attributes,
           health: 50,
           happiness: 50,
           hunger: 50,
           energy: 50,
-          lastUpdated: Date.now(),
+          lastUpdated: now,
         },
       };
     });

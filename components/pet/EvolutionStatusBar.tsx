@@ -196,7 +196,16 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   useEffect(() => {
     if (secondsLeft === 0 && pet) {
       // For eggs or when the pet can evolve, trigger evolution
-      if (evolutionInfo.isEgg || evolutionInfo.canEvolve) {
+      // Add a check to prevent immediate evolution after resurrection
+      const now = Date.now();
+      const timeSinceLastUpdate = (now - pet.attributes.lastUpdated) / 1000;
+
+      // Only trigger evolution if it's been at least 5 seconds since the last update
+      // This prevents immediate evolution after resurrection
+      if (
+        (evolutionInfo.isEgg || evolutionInfo.canEvolve) &&
+        timeSinceLastUpdate > 5
+      ) {
         console.log(
           `[Evolution] Triggering evolution to ${evolutionInfo.nextStage}`
         );
