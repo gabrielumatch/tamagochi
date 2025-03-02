@@ -1,50 +1,97 @@
-# Welcome to your Expo app 👋
+# Tamagotchi App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A virtual pet game built with React Native and Expo, where you can raise and care for your digital pet.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Pet Creation**: Choose from different pet types and give your pet a name
+- **Pet Care**: Feed, clean, and put your pet to sleep to maintain its health
+- **Play Games**: Engage with your pet through various mini-games
+- **Shop**: Purchase items for your pet using coins earned through gameplay
+- **Pet Evolution**: Watch your pet grow through different life stages
+- **Settings**: Customize app preferences and manage notifications
 
-   ```bash
-   npm install
-   ```
+## Screenshots
 
-2. Start the app
+(Screenshots will be added here)
 
-   ```bash
-    npx expo start
-   ```
+## Getting Started
 
-In the output, you'll find options to open the app in a
+### Prerequisites
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- Node.js (v14 or newer)
+- npm or yarn
+- Expo CLI
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Installation
 
-## Get a fresh project
-
-When you're ready, run:
+1. Clone the repository:
 
 ```bash
-npm run reset-project
+git clone https://github.com/yourusername/tamagotchi-app.git
+cd tamagotchi-app
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Install dependencies:
 
-## Learn more
+```bash
+npm install
+# or
+yarn install
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+3. Start the development server:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npx expo start
+```
 
-## Join the community
+4. Run on your device or emulator:
+   - Scan the QR code with the Expo Go app (Android) or Camera app (iOS)
+   - Press 'a' for Android emulator
+   - Press 'i' for iOS simulator
 
-Join our community of developers creating universal apps.
+## Project Structure
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+tamagotchi-app/
+├── app/                    # App screens and navigation
+│   ├── (tabs)/             # Tab-based screens
+│   ├── (create)/           # Pet creation screens
+│   └── index.tsx           # Entry point/splash screen
+├── assets/                 # Static assets
+│   └── images/             # Images and icons
+│       └── pets/           # Pet images for different stages
+├── components/             # Reusable components
+│   ├── pet/                # Pet-specific components
+│   └── ui/                 # UI components
+├── constants/              # App constants
+├── contexts/               # React contexts
+├── types/                  # TypeScript type definitions
+└── README.md               # Project documentation
+```
+
+## Technologies Used
+
+- **React Native**: Mobile app framework
+- **Expo**: Development platform
+- **TypeScript**: Type-safe JavaScript
+- **Expo Router**: Navigation library
+- **AsyncStorage**: Local data persistence
+
+## Features to Add
+
+- More pet types and customization options
+- Additional mini-games
+- Social features to interact with friends' pets
+- Achievements and rewards system
+- More detailed pet statistics and history
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Inspired by the classic Tamagotchi virtual pets
+- Pet graphics and icons from [source]
