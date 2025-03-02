@@ -1,4 +1,11 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+  useCallback,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   EVOLUTION,
@@ -20,6 +27,9 @@ const generateId = () => {
   );
 };
 
+// Minimum time between updates in milliseconds (5 seconds)
+const MIN_UPDATE_INTERVAL = 5000;
+
 // Define context interface
 interface PetContextType {
   pet: Pet | null;
@@ -32,6 +42,8 @@ interface PetContextType {
   putPetToSleep: () => void;
   updatePetAttributes: () => void;
   evolvePet: () => void;
+  // New function to check if pet can evolve
+  canPetEvolve: () => boolean;
 }
 
 // Create context with default values
@@ -46,6 +58,7 @@ const PetContext = createContext<PetContextType>({
   putPetToSleep: () => {},
   updatePetAttributes: () => {},
   evolvePet: () => {},
+  canPetEvolve: () => false,
 });
 
 // Create provider component
@@ -54,6 +67,15 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [pet, setPet] = useState<Pet | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Refs for throttling and optimization
+  const lastUpdateTimeRef = useRef<number>(0);
+  const pendingSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const evolutionCheckCacheRef = useRef<{
+    lastChecked: number;
+    canEvolve: boolean;
+    timeToEvolve: number;
+  } | null>(null);
 
   // Load pet data from storage on mount
   useEffect(() => {
@@ -73,43 +95,119 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     loadPet();
   }, []);
 
-  // Save pet data to storage whenever it changes
+  // Save pet data to storage with debouncing
   useEffect(() => {
-    const savePet = async () => {
-      if (pet) {
-        try {
-          await AsyncStorage.setItem("pet", JSON.stringify(pet));
-          console.log("Pet data saved to storage");
-        } catch (error) {
-          console.error("Failed to save pet data:", error);
-        }
-      }
-    };
+    if (!pet) return;
 
-    if (pet) {
-      console.log("Pet state changed:", {
-        stage: pet.stage,
-        age: pet.age,
-        attributes: {
-          health: pet.attributes.health.toFixed(2),
-          happiness: pet.attributes.happiness.toFixed(2),
-          hunger: pet.attributes.hunger.toFixed(2),
-          energy: pet.attributes.energy.toFixed(2),
-          lastUpdated: new Date(
-            pet.attributes.lastUpdated
-          ).toLocaleTimeString(),
-        },
-      });
+    console.log("Pet state changed:", {
+      stage: pet.stage,
+      age: pet.age,
+      attributes: {
+        health: pet.attributes.health.toFixed(2),
+        happiness: pet.attributes.happiness.toFixed(2),
+        hunger: pet.attributes.hunger.toFixed(2),
+        energy: pet.attributes.energy.toFixed(2),
+        lastUpdated: new Date(pet.attributes.lastUpdated).toLocaleTimeString(),
+      },
+    });
+
+    // Clear any pending save
+    if (pendingSaveRef.current) {
+      clearTimeout(pendingSaveRef.current);
     }
 
-    savePet();
+    // Schedule a new save after 2 seconds of inactivity
+    pendingSaveRef.current = setTimeout(async () => {
+      try {
+        await AsyncStorage.setItem("pet", JSON.stringify(pet));
+        console.log("Pet data saved to storage");
+      } catch (error) {
+        console.error("Failed to save pet data:", error);
+      }
+      pendingSaveRef.current = null;
+    }, 2000);
+
+    // Clean up on unmount
+    return () => {
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current);
+      }
+    };
   }, [pet]);
 
-  // Update pet attributes based on time passed
-  const updatePetAttributes = () => {
+  // Memoized function to check if pet can evolve
+  const canPetEvolve = useCallback(() => {
+    if (!pet) return false;
+
+    const now = Date.now();
+
+    // Use cached result if it's recent (within last 5 seconds)
+    if (
+      evolutionCheckCacheRef.current &&
+      now - evolutionCheckCacheRef.current.lastChecked < 5000
+    ) {
+      return evolutionCheckCacheRef.current.canEvolve;
+    }
+
+    const petType = pet.type as PetType;
+    const petStage = pet.stage as PetStage;
+
+    // Get evolution settings for this pet type and stage
+    const evolutionSettings = getEvolutionSettings(petType, petStage);
+
+    // If already at max stage, can't evolve
+    if (petStage === PetStage.ADULT) {
+      evolutionCheckCacheRef.current = {
+        lastChecked: now,
+        canEvolve: false,
+        timeToEvolve: 0,
+      };
+      return false;
+    }
+
+    // Check if attributes are good enough for evolution
+    const canEvolve =
+      pet.attributes.hunger > evolutionSettings.requiredAttributes.hunger &&
+      pet.attributes.happiness >
+        evolutionSettings.requiredAttributes.happiness &&
+      pet.attributes.health > evolutionSettings.requiredAttributes.health &&
+      pet.attributes.energy > evolutionSettings.requiredAttributes.energy;
+
+    // For testing, we'll use seconds instead of days
+    const secondsSinceLastEvolution =
+      (now - pet.birthDate) / 1000 - pet.lastEvolutionAge;
+
+    const result =
+      canEvolve && secondsSinceLastEvolution >= evolutionSettings.timeToEvolve;
+
+    // Cache the result
+    evolutionCheckCacheRef.current = {
+      lastChecked: now,
+      canEvolve: result,
+      timeToEvolve: evolutionSettings.timeToEvolve,
+    };
+
+    return result;
+  }, [pet]);
+
+  // Update pet attributes based on time passed - with throttling
+  const updatePetAttributes = useCallback(() => {
     if (!pet) return;
 
     const now = Date.now();
+
+    // Throttle updates - only update if enough time has passed since last update
+    if (now - lastUpdateTimeRef.current < MIN_UPDATE_INTERVAL) {
+      console.log(
+        "Update throttled, skipping (last update was",
+        (now - lastUpdateTimeRef.current) / 1000,
+        "seconds ago)"
+      );
+      return;
+    }
+
+    lastUpdateTimeRef.current = now;
+
     const hoursPassed = (now - pet.attributes.lastUpdated) / (1000 * 60 * 60);
     const petType = pet.type as PetType;
     const petStage = pet.stage as PetStage;
@@ -218,53 +316,73 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       let lastEvolutionAge = prevPet.lastEvolutionAge;
       const age = Math.floor(daysSinceBirth);
 
-      // Get evolution settings for this pet type and stage
-      const evolutionSettings = getEvolutionSettings(
-        petType as PetType,
-        petStage as PetStage
-      );
+      // Only check evolution if we haven't recently checked or if attributes have changed significantly
+      const shouldCheckEvolution =
+        !evolutionCheckCacheRef.current ||
+        now - evolutionCheckCacheRef.current.lastChecked > 5000;
 
-      // Check if attributes are good enough for evolution
-      const canEvolve =
-        updatedAttributes.hunger >
-          evolutionSettings.requiredAttributes.hunger &&
-        updatedAttributes.happiness >
-          evolutionSettings.requiredAttributes.happiness &&
-        updatedAttributes.health >
-          evolutionSettings.requiredAttributes.health &&
-        updatedAttributes.energy > evolutionSettings.requiredAttributes.energy;
+      if (shouldCheckEvolution) {
+        // Get evolution settings for this pet type and stage
+        const evolutionSettings = getEvolutionSettings(
+          petType as PetType,
+          petStage as PetStage
+        );
 
-      // For testing, we'll use seconds instead of days
-      const secondsSinceLastEvolution =
-        (now - prevPet.birthDate) / 1000 - prevPet.lastEvolutionAge;
+        // Check if attributes are good enough for evolution
+        const canEvolve =
+          updatedAttributes.hunger >
+            evolutionSettings.requiredAttributes.hunger &&
+          updatedAttributes.happiness >
+            evolutionSettings.requiredAttributes.happiness &&
+          updatedAttributes.health >
+            evolutionSettings.requiredAttributes.health &&
+          updatedAttributes.energy >
+            evolutionSettings.requiredAttributes.energy;
 
-      console.log("Evolution check:");
-      console.log("- Current stage:", stage);
-      console.log("- Seconds since last evolution:", secondsSinceLastEvolution);
-      console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
-      console.log("- Can evolve based on attributes:", canEvolve);
+        // For testing, we'll use seconds instead of days
+        const secondsSinceLastEvolution =
+          (now - prevPet.birthDate) / 1000 - prevPet.lastEvolutionAge;
 
-      // Only evolve if attributes are good enough and enough time has passed
-      if (
-        canEvolve &&
-        secondsSinceLastEvolution >= evolutionSettings.timeToEvolve
-      ) {
-        if (stage === PetStage.TEEN) {
-          stage = PetStage.ADULT;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Pet evolved to ADULT!");
-        } else if (stage === PetStage.CHILD) {
-          stage = PetStage.TEEN;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Pet evolved to TEEN!");
-        } else if (stage === PetStage.BABY) {
-          stage = PetStage.CHILD;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Pet evolved to CHILD!");
-        } else if (stage === PetStage.EGG) {
-          stage = PetStage.BABY;
-          lastEvolutionAge = secondsSinceLastEvolution;
-          console.log("Egg hatched to BABY!");
+        console.log("Evolution check:");
+        console.log("- Current stage:", stage);
+        console.log(
+          "- Seconds since last evolution:",
+          secondsSinceLastEvolution
+        );
+        console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
+        console.log("- Can evolve based on attributes:", canEvolve);
+
+        // Update evolution cache
+        evolutionCheckCacheRef.current = {
+          lastChecked: now,
+          canEvolve:
+            canEvolve &&
+            secondsSinceLastEvolution >= evolutionSettings.timeToEvolve,
+          timeToEvolve: evolutionSettings.timeToEvolve,
+        };
+
+        // Only evolve if attributes are good enough and enough time has passed
+        if (
+          canEvolve &&
+          secondsSinceLastEvolution >= evolutionSettings.timeToEvolve
+        ) {
+          if (stage === PetStage.TEEN) {
+            stage = PetStage.ADULT;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Pet evolved to ADULT!");
+          } else if (stage === PetStage.CHILD) {
+            stage = PetStage.TEEN;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Pet evolved to TEEN!");
+          } else if (stage === PetStage.BABY) {
+            stage = PetStage.CHILD;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Pet evolved to CHILD!");
+          } else if (stage === PetStage.EGG) {
+            stage = PetStage.BABY;
+            lastEvolutionAge = secondsSinceLastEvolution;
+            console.log("Egg hatched to BABY!");
+          }
         }
       }
 
@@ -282,7 +400,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         attributes: finalAttributes,
       };
     });
-  };
+  }, [pet]);
 
   // Create a new pet
   const createPet = (name: string, petType: PetType = PetType.CAT) => {
@@ -485,6 +603,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         putPetToSleep,
         updatePetAttributes,
         evolvePet,
+        canPetEvolve,
       }}
     >
       {children}

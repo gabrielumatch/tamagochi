@@ -60,13 +60,13 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
   cat: {
     egg: {
       decreaseRates: {
-        health: { points: 1, seconds: 20 },
-        happiness: { points: 1, seconds: 40 },
-        hunger: { points: 2, seconds: 30 },
-        energy: { points: 1, seconds: 50 },
+        health: { points: 1, seconds: 50 },
+        happiness: { points: 1, seconds: 50 },
+        hunger: { points: 2, seconds: 50 },
+        energy: { points: 1, seconds: 60 },
       },
       evolution: {
-        timeToEvolve: 30, // 30 seconds for testing
+        timeToEvolve: 300, // 30 seconds for testing
         requiredAttributes: {
           health: 50,
           happiness: 50,
@@ -104,7 +104,7 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
         energy: { points: 2, seconds: 45 },
       },
       evolution: {
-        timeToEvolve: 90, // 90 seconds for testing
+        timeToEvolve: 900, // 90 seconds for testing
         requiredAttributes: {
           health: 70,
           happiness: 70,
@@ -123,7 +123,7 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
         energy: { points: 3, seconds: 40 },
       },
       evolution: {
-        timeToEvolve: 120, // 120 seconds for testing
+        timeToEvolve: 1200, // 120 seconds for testing
         requiredAttributes: {
           health: 75,
           happiness: 75,
@@ -202,7 +202,7 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
         energy: { points: 3, seconds: 35 },
       },
       evolution: {
-        timeToEvolve: 90, // 90 seconds for testing
+        timeToEvolve: 900, // 90 seconds for testing
         requiredAttributes: {
           health: 70,
           happiness: 70,
@@ -221,7 +221,7 @@ export const PET_SETTINGS: Record<string, PetTypeSettings> = {
         energy: { points: 4, seconds: 35 },
       },
       evolution: {
-        timeToEvolve: 120, // 120 seconds for testing
+        timeToEvolve: 1200, // 120 seconds for testing
         requiredAttributes: {
           health: 75,
           happiness: 75,

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
@@ -8,6 +14,7 @@ import { ATTRIBUTE_DECREASE } from "../../constants/GameRules";
 import { usePet } from "../../contexts/PetContext";
 import { getDecreaseRates } from "../../constants/PetSettings";
 import { PetType, PetStage, PetAttributes } from "../../constants/PetTypes";
+import { TimerManager } from "../utils/TimerManager";
 
 interface StatusBarProps {
   value: number;
@@ -19,7 +26,8 @@ interface StatusBarProps {
   petStage: PetStage;
 }
 
-function StatusBar({
+// Memoize the StatusBar component to prevent unnecessary rerenders
+const StatusBar = React.memo(function StatusBar({
   value,
   label,
   icon,
@@ -33,14 +41,35 @@ function StatusBar({
   const { pet, setPet } = usePet();
   const shouldDecreaseRef = useRef(false);
   const initializedRef = useRef(false);
+  const timerIdRef = useRef<string>(`${attributeName}-${petType}-${petStage}`);
 
-  // Get the decrease settings for this pet type, stage, and attribute
-  const decreaseRates = getDecreaseRates(petType, petStage);
-  const attributeSettings = decreaseRates[attributeName];
-  const pointsToDecrease = attributeSettings.points;
-  const secondsPerDecrease = attributeSettings.seconds;
+  // Get the decrease settings for this pet type, stage, and attribute - memoized
+  const decreaseSettings = useMemo(() => {
+    const decreaseRates = getDecreaseRates(petType, petStage);
+    const attributeSettings = decreaseRates[attributeName];
+    return {
+      pointsToDecrease: attributeSettings.points,
+      secondsPerDecrease: attributeSettings.seconds,
+    };
+  }, [attributeName, petType, petStage]);
 
-  // Calculate time until next decrease
+  const { pointsToDecrease, secondsPerDecrease } = decreaseSettings;
+
+  // Handle countdown update
+  const updateCountdown = useCallback(() => {
+    setSecondsLeft((prev) => {
+      if (prev <= 1) {
+        // Mark that we should decrease the attribute
+        shouldDecreaseRef.current = true;
+        // Reset the timer when it reaches zero
+        console.log(`[${label}] Timer reset, attribute should decrease`);
+        return secondsPerDecrease;
+      }
+      return prev - 1;
+    });
+  }, [label, secondsPerDecrease]);
+
+  // Set up the timer using the centralized timer manager
   useEffect(() => {
     console.log(
       `[${label}] Decrease settings: ${pointsToDecrease} points every ${secondsPerDecrease} seconds`
@@ -55,23 +84,19 @@ function StatusBar({
       );
     }
 
-    // Set up the countdown interval
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          // Mark that we should decrease the attribute
-          shouldDecreaseRef.current = true;
-          // Reset the timer when it reaches zero
-          console.log(`[${label}] Timer reset, attribute should decrease`);
-          return secondsPerDecrease;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // Register with the timer manager
+    const timerManager = TimerManager.getInstance();
+    timerManager.registerTimer(
+      timerIdRef.current,
+      updateCountdown,
+      1000 // Update every second
+    );
 
-    // Clean up the interval
-    return () => clearInterval(interval);
-  }, [label, attributeName, secondsPerDecrease, pointsToDecrease]);
+    // Clean up on unmount
+    return () => {
+      timerManager.unregisterTimer(timerIdRef.current);
+    };
+  }, [label, updateCountdown, pointsToDecrease, secondsPerDecrease]);
 
   // Handle the actual attribute decrease in a separate effect
   useEffect(() => {
@@ -123,57 +148,68 @@ function StatusBar({
 
       return () => clearTimeout(timer);
     }
-  }, [secondsLeft, pet, setPet, attributeName, label, pointsToDecrease]);
+  }, [attributeName, label, pet, pointsToDecrease, secondsLeft, setPet]);
 
   // Format the countdown time
   useEffect(() => {
-    // Convert seconds to minutes and seconds
     const minutes = Math.floor(secondsLeft / 60);
     const seconds = secondsLeft % 60;
+    setCountdown(
+      `${minutes.toString().padStart(2, "0")}:${seconds
+        .toString()
+        .padStart(2, "0")}`
+    );
 
-    // Format the countdown string
-    const formattedMinutes = minutes.toString().padStart(2, "0");
-    const formattedSeconds = seconds.toString().padStart(2, "0");
-
-    setCountdown(`${formattedMinutes}:${formattedSeconds}`);
-
-    // Log every 10 seconds to avoid console spam
+    // Log countdown every 10 seconds to avoid console spam
     if (secondsLeft % 10 === 0 || secondsLeft <= 5) {
       console.log(
-        `[${label}] Countdown: ${formattedMinutes}:${formattedSeconds}, Value: ${value.toFixed(
-          2
-        )}`
+        `[${label}] Countdown: ${countdown}, Value: ${value.toFixed(2)}`
       );
     }
-  }, [secondsLeft, label, value]);
+  }, [secondsLeft, label, value, countdown]);
+
+  // Memoize styles to prevent recreation on each render
+  const memoizedStyles = useMemo(
+    () => ({
+      barFill: {
+        width: `${value}%` as any,
+        backgroundColor: color,
+      },
+      iconContainer: {
+        backgroundColor: color + "40",
+      },
+    }),
+    [value, color]
+  );
+
+  const colorScheme = useColorScheme() || "light";
+  const colors = Colors[colorScheme];
 
   return (
-    <View style={styles.statusBarContainer}>
-      <View style={styles.labelContainer}>
-        <FontAwesome5 name={icon} size={14} color={color} style={styles.icon} />
-        <Text style={[styles.label, { color }]}>{label}</Text>
+    <View style={styles.container}>
+      <View style={[styles.iconContainer, memoizedStyles.iconContainer]}>
+        <FontAwesome5 name={icon} size={16} color={color} />
       </View>
-      <View style={styles.barBackground}>
-        <View
-          style={[
-            styles.barFill,
-            {
-              width: `${value}%`,
-              backgroundColor: color,
-              // Add a pulsing effect for critical values
-              opacity: value <= 20 ? 0.8 : 1,
-            },
-          ]}
-        />
-      </View>
-      <View style={styles.valueContainer}>
-        <Text style={styles.valueText}>{Math.round(value)}%</Text>
-        <Text style={[styles.countdownText, { color }]}>
-          -{pointsToDecrease} in {countdown}
-        </Text>
+      <View style={styles.barContainer}>
+        <View style={styles.labelContainer}>
+          <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+          <Text style={[styles.countdown, { color: colors.text + "80" }]}>
+            {countdown}
+          </Text>
+        </View>
+        <View style={styles.bar}>
+          <View style={[styles.barFill, memoizedStyles.barFill]} />
+        </View>
       </View>
     </View>
   );
+});
+
+// Clean up the timer manager when the app is unmounted
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    TimerManager.getInstance().cleanup();
+  });
 }
 
 interface StatusBarsProps {
@@ -285,5 +321,25 @@ const styles = StyleSheet.create({
   countdownText: {
     fontSize: 10,
     textAlign: "right",
+  },
+  iconContainer: {
+    backgroundColor: "#00000040",
+    borderRadius: 16,
+    padding: 4,
+  },
+  barContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bar: {
+    flex: 1,
+    height: 10,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+  countdown: {
+    fontSize: 10,
+    fontWeight: "500",
   },
 });

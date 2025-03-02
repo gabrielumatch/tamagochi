@@ -1,4 +1,10 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, {
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { usePet } from "../../contexts/PetContext";
 import { EVOLUTION, THRESHOLDS, TIME } from "../../constants/GameRules";
@@ -8,6 +14,7 @@ import {
   ATTRIBUTE_THRESHOLDS,
 } from "../../constants/PetSettings";
 import { PetType, PetStage } from "../../constants/PetTypes";
+import { TimerManager } from "../utils/TimerManager";
 
 interface EvolutionStatusBarProps {
   showLabel?: boolean;
@@ -24,12 +31,12 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   height = 12,
   width = "100%",
 }) => {
-  const { pet, evolvePet } = usePet();
+  const { pet, evolvePet, canPetEvolve } = usePet();
   const [countdown, setCountdown] = useState<string>("00:00:00");
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
   const initializedRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
-  const lastUpdateTimeRef = useRef<number>(0);
+  const timerIdRef = useRef<string>("evolution-timer");
 
   // Start pulsing animation
   useEffect(() => {
@@ -99,93 +106,93 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
           isEgg: false,
           secondsUntilEvolution: 0,
         };
-      default:
-        return {
-          secondsLeft: 0,
-          totalSeconds: 0,
-          progress: 0,
-          canEvolve: false,
-          nextStage: "",
-          isEgg: false,
-          secondsUntilEvolution: 0,
-        };
     }
 
-    // Calculate seconds passed since last evolution (for testing)
+    // Calculate time since last evolution
     const now = Date.now();
-    const secondsPassed = (now - pet.birthDate) / 1000 - pet.lastEvolutionAge;
+    const secondsSinceLastEvolution =
+      (now - pet.birthDate) / 1000 - pet.lastEvolutionAge;
 
-    // Get total seconds needed for evolution
+    // Calculate seconds left until evolution
     const totalSeconds = evolutionSettings.timeToEvolve;
+    const secondsUntilEvolution = Math.max(
+      0,
+      totalSeconds - secondsSinceLastEvolution
+    );
 
-    // Calculate seconds left and progress
-    const secondsLeft = Math.max(0, totalSeconds - secondsPassed);
-    const progress =
-      totalSeconds > 0 ? Math.min(1, secondsPassed / totalSeconds) : 1;
+    // Calculate progress (0 to 1)
+    const progress = Math.min(1, secondsSinceLastEvolution / totalSeconds);
 
-    // Check if pet can evolve (all attributes above threshold and enough time has passed)
+    // Check if attributes are good enough for evolution
     const canEvolve =
-      progress >= 1 &&
       pet.attributes.hunger > evolutionSettings.requiredAttributes.hunger &&
       pet.attributes.happiness >
         evolutionSettings.requiredAttributes.happiness &&
       pet.attributes.health > evolutionSettings.requiredAttributes.health &&
       pet.attributes.energy > evolutionSettings.requiredAttributes.energy;
 
-    // Special case for egg
-    const isEgg = pet.stage === PetStage.EGG;
+    // Check if this is an egg (special case for hatching)
+    const isEgg = petStage === PetStage.EGG;
 
     return {
-      secondsLeft,
+      secondsLeft: Math.ceil(secondsUntilEvolution),
       totalSeconds,
-      progress: progress,
-      canEvolve,
-      nextStage: nextStage.charAt(0).toUpperCase() + nextStage.slice(1), // Capitalize
+      progress,
+      canEvolve: canEvolve && secondsUntilEvolution <= 0,
+      nextStage,
       isEgg,
-      secondsUntilEvolution: Math.round(secondsLeft), // Round to nearest integer
+      secondsUntilEvolution,
     };
   }, [pet]);
 
-  // Set up the countdown timer
+  // Update countdown handler
+  const updateCountdown = useCallback(() => {
+    if (!pet) return;
+
+    setSecondsLeft((prev) => {
+      // Don't decrement below zero
+      if (prev <= 0) {
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, [pet]);
+
+  // Set up the countdown timer using the centralized timer manager
   useEffect(() => {
     if (!pet) return;
 
     // Initialize the seconds left only once per evolution info change
     if (!initializedRef.current) {
       const seconds = evolutionInfo.secondsUntilEvolution;
-      setSecondsLeft(seconds);
+      setSecondsLeft(Math.ceil(seconds));
       initializedRef.current = true;
       console.log(
-        `[Evolution] Timer initialized with ${seconds} seconds until ${
-          evolutionInfo.isEgg ? "hatching" : "evolution"
-        }`
+        `[Evolution] Timer initialized with ${Math.ceil(
+          seconds
+        )} seconds until ${evolutionInfo.isEgg ? "hatching" : "evolution"}`
       );
     }
 
-    // Set up the countdown interval - update once per second
-    const interval = setInterval(() => {
-      const now = Date.now();
-      // Only update if at least 1000ms (1 second) has passed since last update
-      if (now - lastUpdateTimeRef.current >= 1000) {
-        lastUpdateTimeRef.current = now;
+    // Register with the timer manager
+    const timerManager = TimerManager.getInstance();
+    timerManager.registerTimer(
+      timerIdRef.current,
+      updateCountdown,
+      1000 // Update every second
+    );
 
-        setSecondsLeft((prev) => {
-          if (prev <= 0) {
-            clearInterval(interval);
-            console.log(`[Evolution] Countdown reached zero`);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }
-    }, 1000);
-
-    // Clean up the interval
+    // Clean up on unmount
     return () => {
-      clearInterval(interval);
+      timerManager.unregisterTimer(timerIdRef.current);
       console.log(`[Evolution] Countdown interval cleared`);
     };
-  }, [evolutionInfo.secondsUntilEvolution, pet, evolutionInfo.isEgg]);
+  }, [
+    evolutionInfo.secondsUntilEvolution,
+    pet,
+    evolutionInfo.isEgg,
+    updateCountdown,
+  ]);
 
   // Reset initialization when evolution info changes
   useEffect(() => {
@@ -195,8 +202,8 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   // Trigger evolution when countdown reaches zero
   useEffect(() => {
     if (secondsLeft === 0 && pet) {
-      // For eggs or when the pet can evolve, trigger evolution
-      if (evolutionInfo.isEgg || evolutionInfo.canEvolve) {
+      // Use the optimized canPetEvolve function to check if evolution is possible
+      if (canPetEvolve()) {
         console.log(
           `[Evolution] Triggering evolution to ${evolutionInfo.nextStage}`
         );
@@ -207,7 +214,7 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
         return () => clearTimeout(timer);
       }
     }
-  }, [secondsLeft, evolutionInfo, pet, evolvePet]);
+  }, [secondsLeft, evolutionInfo, pet, evolvePet, canPetEvolve]);
 
   // Format the countdown time
   useEffect(() => {

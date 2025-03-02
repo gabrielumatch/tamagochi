@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { View, StyleSheet, ScrollView, Text, Pressable } from "react-native";
 import { usePet } from "../../contexts/PetContext";
 // import { useUser } from "../../contexts/UserContext";
@@ -41,32 +41,48 @@ const useUser = () => {
 };
 
 export default function HomeScreen() {
-  const { pet, isLoading, updatePetAttributes, createPet, evolvePet } =
-    usePet();
+  const {
+    pet,
+    isLoading,
+    updatePetAttributes,
+    createPet,
+    evolvePet,
+    canPetEvolve,
+  } = usePet();
   const { user } = useUser();
   const colorScheme = useColorScheme() || "light";
   const colors = Colors[colorScheme];
+  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Memoized update function to avoid recreating on every render
+  const performUpdate = useCallback(() => {
+    if (pet) {
+      updatePetAttributes();
+    }
+  }, [pet, updatePetAttributes]);
 
   // Update pet attributes when the screen is focused
   useEffect(() => {
     console.log("Home screen mounted, updating pet attributes");
-    if (pet) {
-      updatePetAttributes();
-    }
 
-    // Set up an interval to update pet attributes every 10 seconds (for testing)
-    const interval = setInterval(() => {
+    // Initial update
+    performUpdate();
+
+    // Set up an interval to update pet attributes every 30 seconds
+    // This is less frequent than before to reduce unnecessary updates
+    updateIntervalRef.current = setInterval(() => {
       console.log("Interval triggered, updating pet attributes");
-      if (pet) {
-        updatePetAttributes();
-      }
-    }, 10000); // Changed from 60000 (1 minute) to 10000 (10 seconds) for testing
+      performUpdate();
+    }, 30000); // Changed from 10000 (10 seconds) to 30000 (30 seconds)
 
     return () => {
       console.log("Home screen unmounted, clearing interval");
-      clearInterval(interval);
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+        updateIntervalRef.current = null;
+      }
     };
-  }, [pet, updatePetAttributes]);
+  }, [performUpdate]);
 
   // Navigation handlers
   const navigateToCreatePet = () => {
@@ -98,22 +114,26 @@ export default function HomeScreen() {
   if (!pet) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Card style={styles.createPetCard}>
-          <Text style={[styles.title, { color: colors.text }]}>
-            Welcome to Tamagotchi!
+        <Card style={styles.noPetCard}>
+          <Text style={[styles.noPetText, { color: colors.text }]}>
+            You don't have a pet yet!
           </Text>
-          <Text style={[styles.subtitle, { color: colors.text + "99" }]}>
-            Create your virtual pet and take care of it.
+          <Text style={[styles.noPetSubtext, { color: colors.text + "99" }]}>
+            Create a new pet to start your virtual pet journey.
           </Text>
           <Button
-            title="Create New Pet"
-            size="large"
+            title="Create Pet"
             onPress={navigateToCreatePet}
+            type="primary"
+            style={styles.createPetButton}
           />
         </Card>
       </View>
     );
   }
+
+  // Check if pet can evolve
+  const readyToEvolve = canPetEvolve();
 
   // Determine pet mood based on attributes
   const getPetMood = () => {
@@ -301,5 +321,24 @@ const styles = StyleSheet.create({
   debugText: {
     fontSize: 12,
     fontStyle: "italic",
+  },
+  noPetCard: {
+    margin: Layout.spacing.lg,
+    padding: Layout.spacing.lg,
+    alignItems: "center",
+    gap: Layout.spacing.md,
+  },
+  noPetText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  noPetSubtext: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: Layout.spacing.md,
+  },
+  createPetButton: {
+    marginTop: Layout.spacing.md,
   },
 });

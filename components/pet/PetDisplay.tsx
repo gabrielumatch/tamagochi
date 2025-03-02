@@ -1,18 +1,41 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
-import { Pet, PetStage } from "../../constants/PetTypes";
+import { Pet, PetStage, PetType } from "../../constants/PetTypes";
 import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
 import Layout from "../../constants/Layout";
 import { THRESHOLDS } from "../../constants/GameRules";
 
-// Pet emojis for different stages
+// Pet emojis for different types and stages
 const petEmojis = {
-  [PetStage.EGG]: "🥚",
-  [PetStage.BABY]: "🐣",
-  [PetStage.CHILD]: "🐥",
-  [PetStage.TEEN]: "🐤",
-  [PetStage.ADULT]: "🐔",
+  [PetType.CAT]: {
+    [PetStage.EGG]: "🥚",
+    [PetStage.BABY]: "🐱",
+    [PetStage.CHILD]: "🐱",
+    [PetStage.TEEN]: "🐱",
+    [PetStage.ADULT]: "🐈",
+  },
+  [PetType.DOG]: {
+    [PetStage.EGG]: "🥚",
+    [PetStage.BABY]: "🐶",
+    [PetStage.CHILD]: "🐶",
+    [PetStage.TEEN]: "🐶",
+    [PetStage.ADULT]: "🐕",
+  },
+  [PetType.BIRD]: {
+    [PetStage.EGG]: "🥚",
+    [PetStage.BABY]: "🐣",
+    [PetStage.CHILD]: "🐥",
+    [PetStage.TEEN]: "🐤",
+    [PetStage.ADULT]: "🐔",
+  },
+  [PetType.DRAGON]: {
+    [PetStage.EGG]: "🥚",
+    [PetStage.BABY]: "🐲",
+    [PetStage.CHILD]: "🐲",
+    [PetStage.TEEN]: "🐲",
+    [PetStage.ADULT]: "🐉",
+  },
 };
 
 // Stage names for display
@@ -38,270 +61,326 @@ interface PetDisplayProps {
   animation?: "idle" | "happy" | "sad" | "eating" | "sleeping" | "playing";
 }
 
-export default function PetDisplay({
-  pet,
-  animation = "idle",
-}: PetDisplayProps) {
-  const colorScheme = useColorScheme() || "light";
-  const colors = Colors[colorScheme];
+// Memoize the entire component to prevent unnecessary rerenders
+const PetDisplay = React.memo(
+  function PetDisplay({ pet, animation = "idle" }: PetDisplayProps) {
+    const colorScheme = useColorScheme() || "light";
+    const colors = Colors[colorScheme];
 
-  // Animation values
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+    // Animation values - persist between renders
+    const animationValues = useRef({
+      bounce: new Animated.Value(0),
+      rotate: new Animated.Value(0),
+      scale: new Animated.Value(1),
+    }).current;
+    const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Set up animations based on the animation prop
-  useEffect(() => {
-    // Reset animations
-    bounceAnim.setValue(0);
-    rotateAnim.setValue(0);
-    scaleAnim.setValue(1);
+    // Memoize pet type and stage to avoid recalculations
+    const petType = useMemo(
+      () => (pet.type as PetType) || PetType.BIRD,
+      [pet.type]
+    );
+    const petStage = useMemo(
+      () => (pet.stage as PetStage) || PetStage.EGG,
+      [pet.stage]
+    );
 
-    let animationSequence;
+    // Memoize the rotation interpolation
+    const rotate = useMemo(() => {
+      return animationValues.rotate.interpolate({
+        inputRange: [-1, 1],
+        outputRange: ["-30deg", "30deg"],
+      });
+    }, [animationValues.rotate]);
 
-    switch (animation) {
-      case "idle":
-        // Gentle breathing animation
-        animationSequence = Animated.loop(
-          Animated.sequence([
-            Animated.timing(scaleAnim, {
-              toValue: 1.05,
-              duration: 2000,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-              toValue: 1,
-              duration: 2000,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-          ])
-        );
-        break;
+    // Get the appropriate emoji based on pet type and stage - memoized
+    const petEmoji = useMemo(() => {
+      return (
+        petEmojis[petType]?.[petStage] ||
+        petEmojis[PetType.BIRD][petStage] ||
+        "🥚"
+      );
+    }, [petType, petStage]);
 
-      case "happy":
-        // Bouncing animation
-        animationSequence = Animated.loop(
-          Animated.sequence([
-            Animated.timing(bounceAnim, {
-              toValue: -20,
-              duration: 300,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }),
-            Animated.timing(bounceAnim, {
-              toValue: 0,
-              duration: 200,
-              easing: Easing.bounce,
-              useNativeDriver: true,
-            }),
-            Animated.delay(500),
-          ])
-        );
-        break;
+    // Add sleeping indicator if the pet is sleeping - memoized
+    const displayEmoji = useMemo(() => {
+      return animation === "sleeping" ? `${petEmoji} 💤` : petEmoji;
+    }, [animation, petEmoji]);
 
-      case "sad":
-        // Slow side-to-side movement
-        animationSequence = Animated.loop(
-          Animated.sequence([
-            Animated.timing(rotateAnim, {
-              toValue: -0.05,
-              duration: 1000,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-            Animated.timing(rotateAnim, {
-              toValue: 0.05,
-              duration: 1000,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-          ])
-        );
-        break;
+    // Get the stage name for display - memoized
+    const stageName = useMemo(() => {
+      return stageNames[petStage] || "Unknown";
+    }, [petStage]);
 
-      case "eating":
-        // Forward and backward movement
-        animationSequence = Animated.loop(
-          Animated.sequence([
-            Animated.timing(scaleAnim, {
-              toValue: 1.1,
-              duration: 300,
-              easing: Easing.inOut(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-              toValue: 0.95,
-              duration: 300,
-              easing: Easing.inOut(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ])
-        );
-        break;
+    // Calculate pet's overall mood based on attributes - memoized
+    const mood = useMemo(() => {
+      if (petStage === PetStage.EGG) {
+        return moodEmojis.excellent; // Eggs are always in excellent mood
+      }
 
-      case "sleeping":
-        // Gentle pulsing
-        animationSequence = Animated.loop(
-          Animated.sequence([
-            Animated.timing(scaleAnim, {
-              toValue: 1.03,
-              duration: 1500,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-            Animated.timing(scaleAnim, {
-              toValue: 0.97,
-              duration: 1500,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true,
-            }),
-          ])
-        );
-        break;
+      const { health, happiness, hunger, energy } = pet.attributes;
+      const avgAttribute = (health + happiness + hunger + energy) / 4;
 
-      case "playing":
-        // Rotation and bounce
-        animationSequence = Animated.loop(
-          Animated.parallel([
+      if (avgAttribute >= THRESHOLDS.HIGH) {
+        return moodEmojis.excellent;
+      } else if (avgAttribute >= THRESHOLDS.MEDIUM) {
+        return moodEmojis.good;
+      } else if (avgAttribute >= THRESHOLDS.LOW) {
+        return moodEmojis.average;
+      } else if (avgAttribute >= THRESHOLDS.CRITICAL) {
+        return moodEmojis.poor;
+      } else {
+        return moodEmojis.critical;
+      }
+    }, [pet.attributes, petStage]);
+
+    // Memoize styles that depend on colors to prevent recalculation
+    const memoizedStyles = useMemo(
+      () => ({
+        nameText: [styles.nameText, { color: colors.text }],
+        ageText: [styles.ageText, { color: colors.text + "80" }],
+        stageText: [styles.stageText, { color: colors.text }],
+        moodText: [styles.moodText, { color: colors.text }],
+        animatedViewStyle: {
+          transform: [
+            { translateY: animationValues.bounce },
+            { rotate },
+            { scale: animationValues.scale },
+          ],
+        },
+      }),
+      [colors.text, rotate, animationValues]
+    );
+
+    // Create animation sequences - memoized to avoid recreating on every render
+    const createAnimationSequence = useCallback(() => {
+      // Reset animations
+      animationValues.bounce.setValue(0);
+      animationValues.rotate.setValue(0);
+      animationValues.scale.setValue(1);
+
+      let sequence;
+
+      switch (animation) {
+        case "idle":
+          // Gentle breathing animation
+          sequence = Animated.loop(
             Animated.sequence([
-              Animated.timing(bounceAnim, {
-                toValue: -10,
-                duration: 200,
+              Animated.timing(animationValues.scale, {
+                toValue: 1.05,
+                duration: 2000,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true,
+              }),
+              Animated.timing(animationValues.scale, {
+                toValue: 1,
+                duration: 2000,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true,
+              }),
+            ])
+          );
+          break;
+
+        case "happy":
+          // Bouncing animation
+          sequence = Animated.loop(
+            Animated.sequence([
+              Animated.timing(animationValues.bounce, {
+                toValue: -20,
+                duration: 300,
                 easing: Easing.out(Easing.cubic),
                 useNativeDriver: true,
               }),
-              Animated.timing(bounceAnim, {
+              Animated.timing(animationValues.bounce, {
                 toValue: 0,
-                duration: 150,
+                duration: 200,
                 easing: Easing.bounce,
                 useNativeDriver: true,
               }),
-              Animated.delay(100),
-            ]),
+              Animated.delay(500),
+            ])
+          );
+          break;
+
+        case "sad":
+          // Slow side-to-side movement
+          sequence = Animated.loop(
             Animated.sequence([
-              Animated.timing(rotateAnim, {
-                toValue: 0.1,
-                duration: 200,
+              Animated.timing(animationValues.rotate, {
+                toValue: -0.05,
+                duration: 1000,
+                easing: Easing.inOut(Easing.sin),
                 useNativeDriver: true,
               }),
-              Animated.timing(rotateAnim, {
-                toValue: -0.1,
-                duration: 400,
+              Animated.timing(animationValues.rotate, {
+                toValue: 0.05,
+                duration: 1000,
+                easing: Easing.inOut(Easing.sin),
                 useNativeDriver: true,
               }),
-              Animated.timing(rotateAnim, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: true,
-              }),
-            ]),
-          ])
-        );
-        break;
-    }
+            ])
+          );
+          break;
 
-    if (animationSequence) {
-      animationSequence.start();
-    }
+        case "eating":
+          // Forward and backward movement
+          sequence = Animated.loop(
+            Animated.sequence([
+              Animated.timing(animationValues.scale, {
+                toValue: 1.1,
+                duration: 300,
+                easing: Easing.inOut(Easing.quad),
+                useNativeDriver: true,
+              }),
+              Animated.timing(animationValues.scale, {
+                toValue: 0.95,
+                duration: 300,
+                easing: Easing.inOut(Easing.quad),
+                useNativeDriver: true,
+              }),
+            ])
+          );
+          break;
 
-    return () => {
-      if (animationSequence) {
-        animationSequence.stop();
+        case "sleeping":
+          // Gentle pulsing
+          sequence = Animated.loop(
+            Animated.sequence([
+              Animated.timing(animationValues.scale, {
+                toValue: 1.03,
+                duration: 1500,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true,
+              }),
+              Animated.timing(animationValues.scale, {
+                toValue: 0.97,
+                duration: 1500,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true,
+              }),
+            ])
+          );
+          break;
+
+        case "playing":
+          // Rotation and bounce
+          sequence = Animated.loop(
+            Animated.parallel([
+              Animated.sequence([
+                Animated.timing(animationValues.bounce, {
+                  toValue: -10,
+                  duration: 200,
+                  easing: Easing.out(Easing.cubic),
+                  useNativeDriver: true,
+                }),
+                Animated.timing(animationValues.bounce, {
+                  toValue: 0,
+                  duration: 150,
+                  easing: Easing.bounce,
+                  useNativeDriver: true,
+                }),
+                Animated.delay(100),
+              ]),
+              Animated.sequence([
+                Animated.timing(animationValues.rotate, {
+                  toValue: 0.1,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(animationValues.rotate, {
+                  toValue: -0.1,
+                  duration: 400,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(animationValues.rotate, {
+                  toValue: 0,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
+              ]),
+            ])
+          );
+          break;
       }
-    };
-  }, [animation, bounceAnim, rotateAnim, scaleAnim]);
 
-  // Interpolate rotation for transform
-  const rotate = rotateAnim.interpolate({
-    inputRange: [-1, 1],
-    outputRange: ["-30deg", "30deg"],
-  });
+      return sequence;
+    }, [animation, animationValues]);
 
-  // Get the appropriate emoji based on pet stage
-  const getPetEmoji = () => {
-    return petEmojis[pet.stage as PetStage] || "🥚";
-  };
+    // Set up animations based on the animation prop
+    useEffect(() => {
+      // Stop any existing animation
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
 
-  // Add sleeping indicator if the pet is sleeping
-  const getDisplayEmoji = () => {
-    if (animation === "sleeping") {
-      return `${getPetEmoji()} 💤`;
-    }
-    return getPetEmoji();
-  };
+      // Create and start new animation
+      const sequence = createAnimationSequence();
+      if (sequence) {
+        animationRef.current = sequence;
+        sequence.start();
+      }
 
-  // Get the stage name for display
-  const getStageName = () => {
-    return stageNames[pet.stage as PetStage] || "Unknown";
-  };
+      // Clean up on unmount or when animation changes
+      return () => {
+        if (animationRef.current) {
+          animationRef.current.stop();
+          animationRef.current = null;
+        }
+      };
+    }, [createAnimationSequence]);
 
-  // Calculate pet's overall mood based on attributes
-  const getPetMood = () => {
-    if (pet.stage === PetStage.EGG) {
-      return moodEmojis.excellent; // Eggs are always in excellent mood
-    }
-
-    const { health, happiness, hunger, energy } = pet.attributes;
-    const avgAttribute = (health + happiness + hunger + energy) / 4;
-
-    if (avgAttribute >= THRESHOLDS.HIGH) {
-      return moodEmojis.excellent;
-    } else if (avgAttribute >= THRESHOLDS.MEDIUM) {
-      return moodEmojis.good;
-    } else if (avgAttribute >= THRESHOLDS.LOW) {
-      return moodEmojis.average;
-    } else if (avgAttribute >= THRESHOLDS.CRITICAL) {
-      return moodEmojis.poor;
-    } else {
-      return moodEmojis.critical;
-    }
-  };
-
-  const mood = getPetMood();
-
-  return (
-    <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.petContainer,
-          {
-            transform: [
-              { translateY: bounceAnim },
-              { rotate },
-              { scale: scaleAnim },
-            ],
-          },
-        ]}
-      >
-        <Text style={styles.emojiText}>{getDisplayEmoji()}</Text>
-      </Animated.View>
-
-      <View style={styles.nameContainer}>
-        <Text style={[styles.nameText, { color: colors.text }]}>
-          {pet.name}
-        </Text>
-        <View style={styles.infoContainer}>
-          <Text style={[styles.ageText, { color: colors.text + "80" }]}>
-            Age: {pet.age} {pet.age === 1 ? "day" : "days"}
-          </Text>
-          <View style={styles.stageIndicator}>
-            <Text style={[styles.stageText, { color: colors.text }]}>
-              {getStageName()}
+    // Memoize the pet info section to prevent unnecessary rerenders
+    const PetInfo = useMemo(
+      () => (
+        <View style={styles.nameContainer}>
+          <Text style={memoizedStyles.nameText}>{pet.name}</Text>
+          <View style={styles.infoContainer}>
+            <Text style={memoizedStyles.ageText}>
+              Age: {pet.age} {pet.age === 1 ? "day" : "days"}
             </Text>
+            <View style={styles.stageIndicator}>
+              <Text style={memoizedStyles.stageText}>{stageName}</Text>
+            </View>
+          </View>
+          <View style={styles.moodContainer}>
+            <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+            <Text style={memoizedStyles.moodText}>{mood.label}</Text>
           </View>
         </View>
-        <View style={styles.moodContainer}>
-          <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-          <Text style={[styles.moodText, { color: colors.text }]}>
-            {mood.label}
-          </Text>
-        </View>
+      ),
+      [pet.name, pet.age, stageName, mood, memoizedStyles]
+    );
+
+    return (
+      <View style={styles.container}>
+        <Animated.View
+          style={[styles.petContainer, memoizedStyles.animatedViewStyle]}
+        >
+          <Text style={styles.emojiText}>{displayEmoji}</Text>
+        </Animated.View>
+
+        {PetInfo}
       </View>
-    </View>
-  );
-}
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison function for React.memo
+    // Only re-render if these specific properties change
+    return (
+      prevProps.animation === nextProps.animation &&
+      prevProps.pet.name === nextProps.pet.name &&
+      prevProps.pet.age === nextProps.pet.age &&
+      prevProps.pet.type === nextProps.pet.type &&
+      prevProps.pet.stage === nextProps.pet.stage &&
+      prevProps.pet.attributes.health === nextProps.pet.attributes.health &&
+      prevProps.pet.attributes.happiness ===
+        nextProps.pet.attributes.happiness &&
+      prevProps.pet.attributes.hunger === nextProps.pet.attributes.hunger &&
+      prevProps.pet.attributes.energy === nextProps.pet.attributes.energy
+    );
+  }
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -363,3 +442,5 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 });
+
+export default PetDisplay;
