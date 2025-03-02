@@ -15,9 +15,9 @@ import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
 import Layout from "../../constants/Layout";
 import { FontAwesome5 } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { removeItem } from "../../utils/storage";
 
-export default function SettingsScreen() {
+export function SettingsScreen() {
   const { pet, setPet } = usePet();
   const { user, toggleNotifications, toggleSound, toggleVibration, setTheme } =
     useUser();
@@ -45,7 +45,8 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem("pet");
+              // Replace AsyncStorage with our storage utility
+              removeItem("pet");
               setPet(null);
               Alert.alert("Success", "Your pet has been reset.");
             } catch (error) {

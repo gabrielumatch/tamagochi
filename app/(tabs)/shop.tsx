@@ -23,12 +23,30 @@ interface ShopItem {
   description: string;
   price: number;
   icon: string;
-  category: "food" | "toy" | "decoration";
+  category: "food" | "toy" | "decoration" | "special";
   effect?: string;
 }
 
 // Shop items data
 const SHOP_ITEMS: ShopItem[] = [
+  {
+    id: "resurrection_stone",
+    name: "Resurrection Stone",
+    description: "A magical stone that can bring your pet back to life.",
+    price: 200,
+    icon: "gem",
+    category: "special",
+    effect: "Revives your pet if it dies",
+  },
+  {
+    id: "evolution_boost",
+    name: "Evolution Boost",
+    description: "Speeds up your pet's evolution process.",
+    price: 150,
+    icon: "bolt",
+    category: "special",
+    effect: "Increases evolution speed by 50%",
+  },
   {
     id: "premium_food",
     name: "Premium Food",
@@ -91,7 +109,7 @@ export default function ShopScreen() {
   const colorScheme = useColorScheme() || "light";
   const colors = Colors[colorScheme];
   const [selectedCategory, setSelectedCategory] = useState<
-    "all" | "food" | "toy" | "decoration"
+    "all" | "food" | "toy" | "decoration" | "special"
   >("all");
 
   // If loading, show a loading message
@@ -244,6 +262,27 @@ export default function ShopScreen() {
             ]}
           >
             Decor
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.categoryButton,
+            selectedCategory === "special" && {
+              backgroundColor: colors.primary,
+            },
+          ]}
+          onPress={() => setSelectedCategory("special")}
+        >
+          <Text
+            style={[
+              styles.categoryText,
+              {
+                color: selectedCategory === "special" ? "#FFFFFF" : colors.text,
+              },
+            ]}
+          >
+            Special
           </Text>
         </TouchableOpacity>
       </View>

@@ -12,6 +12,7 @@ export enum PetStage {
   CHILD = "child",
   TEEN = "teen",
   ADULT = "adult",
+  DEAD = "dead",
 }
 
 // Pet Types

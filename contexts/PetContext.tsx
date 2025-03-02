@@ -1,12 +1,4 @@
-import React, {
-  createContext,
-  useState,
-  useEffect,
-  useContext,
-  useRef,
-  useCallback,
-} from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import {
   EVOLUTION,
   ATTRIBUTE_DECREASE,
@@ -18,6 +10,7 @@ import {
   ATTRIBUTE_THRESHOLDS,
 } from "../constants/PetSettings";
 import { PetType, PetStage, PetAttributes, Pet } from "../constants/PetTypes";
+import { getItem, setItem } from "../utils/storage";
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -42,8 +35,7 @@ interface PetContextType {
   putPetToSleep: () => void;
   updatePetAttributes: () => void;
   evolvePet: () => void;
-  // New function to check if pet can evolve
-  canPetEvolve: () => boolean;
+  resurrectPet: () => void;
 }
 
 // Create context with default values
@@ -58,7 +50,7 @@ const PetContext = createContext<PetContextType>({
   putPetToSleep: () => {},
   updatePetAttributes: () => {},
   evolvePet: () => {},
-  canPetEvolve: () => false,
+  resurrectPet: () => {},
 });
 
 // Create provider component
@@ -79,11 +71,11 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Load pet data from storage on mount
   useEffect(() => {
-    const loadPet = async () => {
+    const loadPet = () => {
       try {
-        const petData = await AsyncStorage.getItem("pet");
+        const petData = getItem<Pet>("pet");
         if (petData) {
-          setPet(JSON.parse(petData));
+          setPet(petData);
         }
       } catch (error) {
         console.error("Failed to load pet data:", error);
@@ -97,42 +89,31 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Save pet data to storage with debouncing
   useEffect(() => {
-    if (!pet) return;
-
-    console.log("Pet state changed:", {
-      stage: pet.stage,
-      age: pet.age,
-      attributes: {
-        health: pet.attributes.health.toFixed(2),
-        happiness: pet.attributes.happiness.toFixed(2),
-        hunger: pet.attributes.hunger.toFixed(2),
-        energy: pet.attributes.energy.toFixed(2),
-        lastUpdated: new Date(pet.attributes.lastUpdated).toLocaleTimeString(),
-      },
-    });
-
-    // Clear any pending save
-    if (pendingSaveRef.current) {
-      clearTimeout(pendingSaveRef.current);
-    }
-
-    // Schedule a new save after 2 seconds of inactivity
-    pendingSaveRef.current = setTimeout(async () => {
-      try {
-        await AsyncStorage.setItem("pet", JSON.stringify(pet));
-        console.log("Pet data saved to storage");
-      } catch (error) {
-        console.error("Failed to save pet data:", error);
-      }
-      pendingSaveRef.current = null;
-    }, 2000);
-
-    // Clean up on unmount
-    return () => {
-      if (pendingSaveRef.current) {
-        clearTimeout(pendingSaveRef.current);
+    const savePet = () => {
+      if (pet) {
+        try {
+          setItem("pet", pet);
+          console.log("Pet data saved to storage");
+        } catch (error) {
+          console.error("Failed to save pet data:", error);
+        }
       }
     };
+
+    if (pet) {
+      console.log("Pet state changed:", {
+        stage: pet.stage,
+        age: pet.age,
+        attributes: {
+          health: pet.attributes.health.toFixed(2),
+          happiness: pet.attributes.happiness.toFixed(2),
+          hunger: pet.attributes.hunger.toFixed(2),
+          energy: pet.attributes.energy.toFixed(2),
+          lastUpdated: new Date(pet.attributes.lastUpdated).toISOString(),
+        },
+      });
+      savePet();
+    }
   }, [pet]);
 
   // Memoized function to check if pet can evolve
@@ -193,6 +174,9 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
   // Update pet attributes based on time passed - with throttling
   const updatePetAttributes = useCallback(() => {
     if (!pet) return;
+
+    // Skip updates if pet is already dead
+    if (pet.stage === PetStage.DEAD) return;
 
     const now = Date.now();
 
@@ -310,6 +294,22 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log("- Energy:", updatedAttributes.energy.toFixed(2));
       console.log("- Health:", updatedAttributes.health.toFixed(2));
 
+      // Check if pet should die (health at 0 or all attributes critically low)
+      const isDead =
+        updatedAttributes.health <= 0 ||
+        (updatedAttributes.hunger <= 5 &&
+          updatedAttributes.happiness <= 5 &&
+          updatedAttributes.energy <= 5);
+
+      if (isDead && prevPet.stage !== PetStage.DEAD) {
+        console.log("Pet has died due to neglect!");
+        return {
+          ...prevPet,
+          stage: PetStage.DEAD,
+          attributes: updatedAttributes,
+        };
+      }
+
       // Check if pet should evolve based on age and settings
       const daysSinceBirth = (now - prevPet.birthDate) / (1000 * 60 * 60 * 24);
       let stage = prevPet.stage;
@@ -339,50 +339,39 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
           updatedAttributes.energy >
             evolutionSettings.requiredAttributes.energy;
 
-        // For testing, we'll use seconds instead of days
-        const secondsSinceLastEvolution =
-          (now - prevPet.birthDate) / 1000 - prevPet.lastEvolutionAge;
+      // Add a safety check - if the pet was recently resurrected, don't evolve immediately
+      const timeSinceLastUpdate = (now - prevPet.attributes.lastUpdated) / 1000;
+      const recentlyUpdated = timeSinceLastUpdate < 5; // Less than 5 seconds since last update
 
-        console.log("Evolution check:");
-        console.log("- Current stage:", stage);
-        console.log(
-          "- Seconds since last evolution:",
-          secondsSinceLastEvolution
-        );
-        console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
-        console.log("- Can evolve based on attributes:", canEvolve);
+      console.log("Evolution check:");
+      console.log("- Current stage:", stage);
+      console.log("- Seconds since last evolution:", secondsSinceLastEvolution);
+      console.log("- Time needed to evolve:", evolutionSettings.timeToEvolve);
+      console.log("- Can evolve based on attributes:", canEvolve);
+      console.log("- Recently updated:", recentlyUpdated);
 
-        // Update evolution cache
-        evolutionCheckCacheRef.current = {
-          lastChecked: now,
-          canEvolve:
-            canEvolve &&
-            secondsSinceLastEvolution >= evolutionSettings.timeToEvolve,
-          timeToEvolve: evolutionSettings.timeToEvolve,
-        };
-
-        // Only evolve if attributes are good enough and enough time has passed
-        if (
-          canEvolve &&
-          secondsSinceLastEvolution >= evolutionSettings.timeToEvolve
-        ) {
-          if (stage === PetStage.TEEN) {
-            stage = PetStage.ADULT;
-            lastEvolutionAge = secondsSinceLastEvolution;
-            console.log("Pet evolved to ADULT!");
-          } else if (stage === PetStage.CHILD) {
-            stage = PetStage.TEEN;
-            lastEvolutionAge = secondsSinceLastEvolution;
-            console.log("Pet evolved to TEEN!");
-          } else if (stage === PetStage.BABY) {
-            stage = PetStage.CHILD;
-            lastEvolutionAge = secondsSinceLastEvolution;
-            console.log("Pet evolved to CHILD!");
-          } else if (stage === PetStage.EGG) {
-            stage = PetStage.BABY;
-            lastEvolutionAge = secondsSinceLastEvolution;
-            console.log("Egg hatched to BABY!");
-          }
+      // Only evolve if attributes are good enough, enough time has passed, and not recently updated
+      if (
+        canEvolve &&
+        secondsSinceLastEvolution >= evolutionSettings.timeToEvolve &&
+        !recentlyUpdated
+      ) {
+        if (stage === PetStage.TEEN) {
+          stage = PetStage.ADULT;
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Pet evolved to ADULT!");
+        } else if (stage === PetStage.CHILD) {
+          stage = PetStage.TEEN;
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Pet evolved to TEEN!");
+        } else if (stage === PetStage.BABY) {
+          stage = PetStage.CHILD;
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Pet evolved to CHILD!");
+        } else if (stage === PetStage.EGG) {
+          stage = PetStage.BABY;
+          lastEvolutionAge = secondsSinceLastEvolution;
+          console.log("Egg hatched to BABY!");
         }
       }
 
@@ -590,6 +579,45 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Resurrect the pet
+  const resurrectPet = () => {
+    if (!pet || pet.stage !== PetStage.DEAD) return;
+
+    setPet((prevPet) => {
+      if (!prevPet) return null;
+
+      const now = Date.now();
+      const secondsSinceBirth = (now - prevPet.birthDate) / 1000;
+
+      // Determine which stage to resurrect to based on age
+      let resurrectedStage = PetStage.BABY;
+      if (prevPet.age >= 10) {
+        resurrectedStage = PetStage.ADULT;
+      } else if (prevPet.age >= 5) {
+        resurrectedStage = PetStage.TEEN;
+      } else if (prevPet.age >= 2) {
+        resurrectedStage = PetStage.CHILD;
+      }
+
+      console.log(`Pet resurrected from death to ${resurrectedStage}!`);
+
+      // Reset the evolution timer by setting lastEvolutionAge to current time
+      return {
+        ...prevPet,
+        stage: resurrectedStage,
+        lastEvolutionAge: secondsSinceBirth, // Reset evolution timer
+        attributes: {
+          ...prevPet.attributes,
+          health: 50,
+          happiness: 50,
+          hunger: 50,
+          energy: 50,
+          lastUpdated: now,
+        },
+      };
+    });
+  };
+
   return (
     <PetContext.Provider
       value={{
@@ -603,7 +631,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         putPetToSleep,
         updatePetAttributes,
         evolvePet,
-        canPetEvolve,
+        resurrectPet,
       }}
     >
       {children}

@@ -5,37 +5,16 @@ import Colors from "../../constants/Colors";
 import { useColorScheme } from "react-native";
 import Layout from "../../constants/Layout";
 import { THRESHOLDS } from "../../constants/GameRules";
+import { getPetEmoji as getPetEmojiFromSettings } from "../../constants/PetSettings";
 
 // Pet emojis for different types and stages
 const petEmojis = {
-  [PetType.CAT]: {
-    [PetStage.EGG]: "🥚",
-    [PetStage.BABY]: "🐱",
-    [PetStage.CHILD]: "🐱",
-    [PetStage.TEEN]: "🐱",
-    [PetStage.ADULT]: "🐈",
-  },
-  [PetType.DOG]: {
-    [PetStage.EGG]: "🥚",
-    [PetStage.BABY]: "🐶",
-    [PetStage.CHILD]: "🐶",
-    [PetStage.TEEN]: "🐶",
-    [PetStage.ADULT]: "🐕",
-  },
-  [PetType.BIRD]: {
-    [PetStage.EGG]: "🥚",
-    [PetStage.BABY]: "🐣",
-    [PetStage.CHILD]: "🐥",
-    [PetStage.TEEN]: "🐤",
-    [PetStage.ADULT]: "🐔",
-  },
-  [PetType.DRAGON]: {
-    [PetStage.EGG]: "🥚",
-    [PetStage.BABY]: "🐲",
-    [PetStage.CHILD]: "🐲",
-    [PetStage.TEEN]: "🐲",
-    [PetStage.ADULT]: "🐉",
-  },
+  [PetStage.EGG]: "🥚",
+  [PetStage.BABY]: "🐣",
+  [PetStage.CHILD]: "🐥",
+  [PetStage.TEEN]: "🐤",
+  [PetStage.ADULT]: "🐔",
+  [PetStage.DEAD]: "💀",
 };
 
 // Stage names for display
@@ -45,6 +24,7 @@ const stageNames = {
   [PetStage.CHILD]: "Child",
   [PetStage.TEEN]: "Teen",
   [PetStage.ADULT]: "Adult",
+  [PetStage.DEAD]: "Dead",
 };
 
 // Mood emojis based on overall pet condition
@@ -307,12 +287,15 @@ const PetDisplay = React.memo(
       return sequence;
     }, [animation, animationValues]);
 
-    // Set up animations based on the animation prop
-    useEffect(() => {
-      // Stop any existing animation
-      if (animationRef.current) {
-        animationRef.current.stop();
-      }
+  // Get the appropriate emoji based on pet stage and type
+  const getPetEmoji = () => {
+    // Use the pet type and stage to get the correct emoji
+    return (
+      getPetEmojiFromSettings(pet.type, pet.stage) ||
+      petEmojis[pet.stage as PetStage] ||
+      "🥚"
+    );
+  };
 
       // Create and start new animation
       const sequence = createAnimationSequence();

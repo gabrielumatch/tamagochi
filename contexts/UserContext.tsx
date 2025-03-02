@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getItem, setItem } from "../utils/storage";
 
 // Define user interface
 export interface User {
@@ -57,11 +57,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Load user data from storage on mount
   useEffect(() => {
-    const loadUser = async () => {
+    const loadUser = () => {
       try {
-        const userData = await AsyncStorage.getItem("user");
+        const userData = getItem<User>("user");
         if (userData) {
-          setUser(JSON.parse(userData));
+          setUser(userData);
         } else {
           // Create default user if none exists
           const defaultUser: User = {
@@ -89,17 +89,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Save user data to storage whenever it changes
   useEffect(() => {
-    const saveUser = async () => {
+    const saveUser = () => {
       if (user) {
         try {
-          await AsyncStorage.setItem("user", JSON.stringify(user));
+          setItem("user", user);
         } catch (error) {
           console.error("Failed to save user data:", error);
         }
       }
     };
 
-    saveUser();
+    if (user) {
+      saveUser();
+    }
   }, [user]);
 
   // Add coins to user's balance
