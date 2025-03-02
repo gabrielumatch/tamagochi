@@ -29,6 +29,7 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
   const initializedRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const lastUpdateTimeRef = useRef<number>(0);
 
   // Start pulsing animation
   useEffect(() => {
@@ -141,7 +142,7 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
       canEvolve,
       nextStage: nextStage.charAt(0).toUpperCase() + nextStage.slice(1), // Capitalize
       isEgg,
-      secondsUntilEvolution: secondsLeft,
+      secondsUntilEvolution: Math.round(secondsLeft), // Round to nearest integer
     };
   }, [pet]);
 
@@ -161,16 +162,22 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
       );
     }
 
-    // Set up the countdown interval
+    // Set up the countdown interval - update once per second
     const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 0) {
-          clearInterval(interval);
-          console.log(`[Evolution] Countdown reached zero`);
-          return 0;
-        }
-        return prev - 1;
-      });
+      const now = Date.now();
+      // Only update if at least 1000ms (1 second) has passed since last update
+      if (now - lastUpdateTimeRef.current >= 1000) {
+        lastUpdateTimeRef.current = now;
+
+        setSecondsLeft((prev) => {
+          if (prev <= 0) {
+            clearInterval(interval);
+            console.log(`[Evolution] Countdown reached zero`);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
 
     // Clean up the interval
@@ -219,10 +226,10 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
       return;
     }
 
-    // Convert seconds to hours, minutes, seconds
+    // Convert seconds to hours, minutes, seconds - using Math.floor to ensure integers
     const hours = Math.floor(secondsLeft / 3600);
     const minutes = Math.floor((secondsLeft % 3600) / 60);
-    const seconds = secondsLeft % 60;
+    const seconds = Math.floor(secondsLeft % 60);
 
     // Format the countdown string
     const formattedHours = hours.toString().padStart(2, "0");
@@ -232,14 +239,14 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
     setCountdown(`${formattedHours}:${formattedMinutes}:${formattedSeconds}`);
 
     // Log countdown every 10 seconds to avoid console spam
-    if (secondsLeft % 10 === 0 || secondsLeft <= 5) {
+    if (Math.floor(secondsLeft) % 10 === 0 || secondsLeft <= 5) {
       console.log(
         `[Evolution] Countdown: ${formattedHours}:${formattedMinutes}:${formattedSeconds}`
       );
     }
   }, [secondsLeft, evolutionInfo, pet]);
 
-  // Format the time left string
+  // Format the time left string in a more human-readable format
   const timeLeftText = useMemo(() => {
     if (!pet) return "";
 
@@ -255,8 +262,22 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
       return "Max evolution reached";
     }
 
-    return `Evolving to ${evolutionInfo.nextStage} in ${countdown}`;
-  }, [pet, evolutionInfo, countdown]);
+    // Format time in a more human-readable way
+    if (secondsLeft > 0) {
+      const hours = Math.floor(secondsLeft / 3600);
+      const minutes = Math.floor((secondsLeft % 3600) / 60);
+
+      if (hours > 0) {
+        return `Evolving to ${evolutionInfo.nextStage} in ${hours}h ${minutes}m`;
+      } else if (minutes > 0) {
+        return `Evolving to ${evolutionInfo.nextStage} in ${minutes}m`;
+      } else {
+        return `Evolving to ${evolutionInfo.nextStage} in <1m`;
+      }
+    }
+
+    return `Evolving to ${evolutionInfo.nextStage} soon`;
+  }, [pet, evolutionInfo, secondsLeft]);
 
   // Determine the color of the progress bar
   const progressColor = useMemo(() => {
@@ -280,7 +301,11 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
       {showLabel && (
         <View style={styles.labelContainer}>
           <Text style={styles.label}>Evolution: {timeLeftText}</Text>
-          <Text style={styles.countdown}>{countdown}</Text>
+          <Text style={styles.countdown}>
+            {evolutionInfo.canEvolve || pet?.stage === PetStage.ADULT
+              ? countdown
+              : `${Math.floor(evolutionInfo.progress * 100)}%`}
+          </Text>
         </View>
       )}
       <View style={[styles.barContainer, { height, width }]}>
@@ -290,7 +315,7 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
             style={[
               styles.progressBar,
               {
-                width: `${(1 - secondsLeft / 30) * 100}%`, // Assuming 30 seconds for egg hatching
+                width: `${Math.floor((1 - secondsLeft / 30) * 100)}%`, // Assuming 30 seconds for egg hatching
                 backgroundColor: progressColor,
               },
             ]}
@@ -300,7 +325,7 @@ const EvolutionStatusBar: React.FC<EvolutionStatusBarProps> = ({
             style={[
               styles.progressBar,
               {
-                width: `${evolutionInfo.progress * 100}%`,
+                width: `${Math.floor(evolutionInfo.progress * 100)}%`,
                 backgroundColor: progressColor,
               },
             ]}

@@ -6,6 +6,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import { usePet } from "../../contexts/PetContext";
 import { PetType } from "../../constants/PetTypes";
@@ -151,7 +152,7 @@ export default function CreatePetScreen() {
         </Text>
 
         {petTypes.map((type) => (
-          <View
+          <TouchableOpacity
             key={type.id}
             style={[
               styles.typeOption,
@@ -160,13 +161,9 @@ export default function CreatePetScreen() {
                 backgroundColor: colors.primary + "10",
               },
             ]}
+            onPress={() => setSelectedType(type.id)}
+            activeOpacity={0.7}
           >
-            <Button
-              type={selectedType === type.id ? "primary" : "outline"}
-              title={type.name}
-              onPress={() => setSelectedType(type.id)}
-              style={styles.typeButton}
-            />
             <View style={styles.typeContent}>
               <Text style={styles.emojiText}>{type.emoji}</Text>
               <View style={styles.typeInfo}>
@@ -183,7 +180,7 @@ export default function CreatePetScreen() {
                 </Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         ))}
       </Card>
 
@@ -244,12 +241,7 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     borderRadius: Layout.borderRadius.md,
     overflow: "hidden",
-  },
-  typeButton: {
-    height: 80,
-    justifyContent: "flex-start",
-    marginBottom: -80, // Make the button overlay the content
-    opacity: 0.001, // Make it nearly invisible but still clickable
+    padding: Layout.spacing.sm,
   },
   typeContent: {
     flexDirection: "row",

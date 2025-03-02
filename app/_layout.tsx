@@ -4,12 +4,7 @@ import { useFonts } from "expo-font";
 import { SplashScreen, Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { PetProvider } from "../contexts/PetContext";
-// import { UserProvider } from "../contexts/UserContext";
-
-// Mock UserProvider until TypeScript resolves the import issue
-const UserProvider = ({ children }: { children: React.ReactNode }) => {
-  return <>{children}</>;
-};
+import { UserProvider } from "../contexts/UserContext";
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
