@@ -11,7 +11,7 @@ import { FontAwesome5 } from "@expo/vector-icons";
 
 export default function GameOverModal() {
   const router = useRouter();
-  const { pet, resurrectPet } = usePet();
+  const { pet, resurrectPet, resetPet } = usePet();
   const { user, useItem, spendCoins } = useUser();
   const colorScheme = useColorScheme() || "light";
   const colors = Colors[colorScheme];
@@ -129,7 +129,12 @@ export default function GameOverModal() {
         {
           text: "Start Over",
           style: "destructive",
-          onPress: () => router.replace("/"),
+          onPress: () => {
+            // Reset pet data before navigating
+            resetPet();
+            // Navigate to the create pet screen
+            router.replace("/(create)/create-pet");
+          },
         },
       ]
     );

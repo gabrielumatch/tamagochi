@@ -33,6 +33,7 @@ interface PetContextType {
   updatePetAttributes: () => void;
   evolvePet: () => void;
   resurrectPet: () => void;
+  resetPet: () => void;
 }
 
 // Create context with default values
@@ -48,6 +49,7 @@ const PetContext = createContext<PetContextType>({
   updatePetAttributes: () => {},
   evolvePet: () => {},
   resurrectPet: () => {},
+  resetPet: () => {},
 });
 
 // Create provider component
@@ -535,6 +537,19 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
+  // Reset pet data completely (for starting over)
+  const resetPet = () => {
+    try {
+      // Remove pet data from storage
+      setItem("pet", null);
+      // Clear pet state
+      setPet(null);
+      console.log("Pet data reset successfully");
+    } catch (error) {
+      console.error("Failed to reset pet data:", error);
+    }
+  };
+
   return (
     <PetContext.Provider
       value={{
@@ -549,6 +564,7 @@ export const PetProvider: React.FC<{ children: React.ReactNode }> = ({
         updatePetAttributes,
         evolvePet,
         resurrectPet,
+        resetPet,
       }}
     >
       {children}

@@ -127,13 +127,6 @@ tamagotchi/
 - Shared components in the components directory
 - Business logic separated into service modules
 
-## Testing Strategy
-
-- **Unit Tests**: For utility functions and services
-- **Component Tests**: For UI components using React Testing Library
-- **Integration Tests**: For key user flows
-- **E2E Tests**: Using Maestro for critical paths
-
 ## Deployment Pipeline
 
 - **Development**: Local Expo development server

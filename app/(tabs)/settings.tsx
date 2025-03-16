@@ -18,7 +18,7 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { removeItem } from "../../utils/storage";
 
 export function SettingsScreen() {
-  const { pet, setPet } = usePet();
+  const { pet, setPet, resetPet } = usePet();
   const { user, toggleNotifications, toggleSound, toggleVibration, setTheme } =
     useUser();
   const colorScheme = useColorScheme() || "light";
@@ -45,10 +45,12 @@ export function SettingsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Replace AsyncStorage with our storage utility
-              removeItem("pet");
-              setPet(null);
-              Alert.alert("Success", "Your pet has been reset.");
+              // Use the resetPet function to properly clean up pet data
+              resetPet();
+              Alert.alert(
+                "Success",
+                "Your pet has been reset. You can now create a new pet."
+              );
             } catch (error) {
               console.error("Failed to reset pet:", error);
               Alert.alert("Error", "Failed to reset pet. Please try again.");
